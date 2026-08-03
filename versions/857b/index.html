@@ -1685,8 +1685,8 @@
 
       <div id="re-overflow-banner" style="display:none;background:#fdecea;border:1px solid #c0392b;color:#c0392b;border-radius:4px;padding:0.6rem 0.9rem;margin-bottom:0.75rem;font-size:0.78rem;font-weight:600;"></div>
 
-      <div id="re-frame-wrap" style="display:none;width:100%;overflow:hidden;background:#e8e7e3;border-radius:4px;">
-        <iframe id="re-frame" onload="initResumeEditorFrame(this)" style="border:none;display:block;transform-origin:top left;" title="Styled resume editor"></iframe>
+      <div id="re-frame-wrap" style="display:none;width:100%;overflow-x:auto;overflow-y:visible;background:#e8e7e3;border-radius:4px;">
+        <iframe id="re-frame" onload="initResumeEditorFrame(this)" style="border:none;display:block;" title="Styled resume editor"></iframe>
       </div>
     </div>
 
@@ -7236,13 +7236,14 @@ function updateReDirtyDot() {
 function initResumeEditorFrame(frame) {
   const doc = frame.contentDocument;
   if (!doc || !doc.body) return;
+  try { doc.designMode = 'on'; } catch(e) {}
   doc.body.contentEditable = 'true';
   doc.body.spellcheck = true;
   doc.body.style.outline = 'none';
   const printBar = doc.querySelector('.print-bar');
   if (printBar) printBar.contentEditable = 'false';
   const styleTag = doc.createElement('style');
-  styleTag.textContent = '.re-overflow-flag{outline:3px solid #c0392b !important;outline-offset:-3px;}';
+  styleTag.textContent = '.re-overflow-flag{outline:3px solid #c0392b !important;outline-offset:-3px;} .page{cursor:text;}';
   doc.head.appendChild(styleTag);
   doc.addEventListener('input', () => {
     _reDirty = true;
@@ -7258,13 +7259,16 @@ function scaleResumeEditorFrame() {
   const frame = document.getElementById('re-frame');
   if (!wrap || !frame || !frame.contentDocument || !frame.contentDocument.body) return;
   const contentWidth = 880;
-  frame.style.width = contentWidth + 'px';
-  const fullHeight = frame.contentDocument.body.scrollHeight;
-  frame.style.height = fullHeight + 'px';
+  const doc = frame.contentDocument;
   const availWidth = wrap.clientWidth || contentWidth;
-  const scale = Math.min(1, availWidth / contentWidth);
-  frame.style.transform = 'scale(' + scale + ')';
-  wrap.style.height = Math.round(fullHeight * scale) + 'px';
+  const zoom = Math.min(1, availWidth / contentWidth);
+  // Zoom is applied INSIDE the iframe's own document so click/cursor coordinates
+  // stay correct. A CSS transform on the iframe element itself breaks editing.
+  doc.body.style.zoom = zoom;
+  frame.style.width = '100%';
+  const fullHeight = doc.body.scrollHeight * zoom;
+  frame.style.height = Math.max(fullHeight, 200) + 'px';
+  wrap.style.overflowX = 'auto';
 }
 
 function checkResumeEditorOverflow() {

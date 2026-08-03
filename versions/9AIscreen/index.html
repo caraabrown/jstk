@@ -1095,6 +1095,18 @@
     <span id="gh-sync-label">Synced</span>
   </div>
 
+  <!-- PIPELINE PROGRESS BAR -->
+  <div id="pipeline-bar" style="background:#0a0a0a;padding:10px 3rem 14px;display:none;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;position:relative;margin-bottom:8px;" id="pipeline-steps"></div>
+    <div style="height:3px;background:#1e1e1e;border-radius:2px;position:relative;margin:0 10px;">
+      <div id="pipeline-fill" style="height:100%;border-radius:2px;background:#3fa040;transition:width 0.4s ease;width:0%;"></div>
+      <div id="pipeline-glow" style="position:absolute;top:-4px;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid #3fa040;transform:translateX(-50%);left:0%;transition:left 0.4s ease;"></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+      <div id="pipeline-summary" style="font-size:11px;color:#666;font-family:'Raleway',sans-serif;letter-spacing:0.04em;"></div>
+      <button id="pipeline-cta" style="display:none;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;background:#fff;color:#000;border:none;border-radius:3px;cursor:pointer;font-family:'Raleway',sans-serif;"></button>
+    </div>
+  </div>
   <!-- JD CONTEXT BAR -->
   <div id="jd-context-bar" style="background:#111;border-top:1px solid #1a1a1a;padding:7px 3rem;display:none;align-items:center;justify-content:space-between;gap:1rem;">
     <div style="display:flex;align-items:center;gap:10px;">
@@ -1197,15 +1209,6 @@
 <div class="app">
   <!-- SIDEBAR NAV -->
   <nav>
-    <div id="nav-progress" style="display:none;padding:0 1.6rem 1.1rem;">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;">
-        <span id="nav-progress-label" style="font-family:'Raleway',sans-serif;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:#888;"></span>
-        <span id="nav-progress-pct" style="font-family:'Raleway',sans-serif;font-size:0.66rem;font-weight:700;color:#3b6d11;"></span>
-      </div>
-      <div style="height:3px;background:#1e1e1e;border-radius:2px;overflow:hidden;">
-        <div id="nav-progress-fill" style="height:100%;background:#3fa040;width:0%;transition:width 0.4s ease;"></div>
-      </div>
-    </div>
     <div class="nav-section">Set Up</div>
     <ul>
       <li><a href="#" data-panel="dashboard" class="active"><span class="num">◈</span> Dashboard</a></li>
@@ -1650,7 +1653,7 @@
       <!-- CHECKLIST -->
       <div class="sa-checklist-wrap" id="sa-checklist-wrap" style="display:none;">
         <div class="sa-cl-title-row"><div class="sa-cl-title">Pre-Tailoring Checklist</div></div>
-        <div class="sa-cl-sub"><span class="sa-badge sa-b-pri">PRIORITY</span> fix once before any application. <span class="sa-badge sa-b-jd">PER JD</span> fresh tailoring per application. <span class="sa-badge sa-b-res">RESOLVED</span> already fixed. <span class="sa-badge sa-b-ok">&#10003; CLEAN</span> no action needed.</div>
+        <div class="sa-cl-sub"><span class="sa-badge sa-b-pri">PRIORITY</span> fix once before any application. <span class="sa-badge sa-b-jd">RE-TAILOR</span> revisit per application. <span class="sa-badge sa-b-res">RESOLVED</span> already fixed. <span class="sa-badge sa-b-ok">&#10003; CLEAN</span> no action needed.</div>
         <div id="sa-checklist-body"></div>
       </div>
 
@@ -3110,7 +3113,6 @@ let savedJDUrl     = localStorage.getItem('cara_sess_jdurl') || '';
 let savedRoleName  = localStorage.getItem('cara_sess_rolename') || '';
 let savedCompany   = localStorage.getItem('cara_sess_company') || '';
 let savedRoleTitle = localStorage.getItem('cara_sess_roletitle') || '';
-let savedTrackerJobId = localStorage.getItem('cara_sess_trackerid') || '';
 let savedAtsKeywords = localStorage.getItem('cara_sess_ats_kw') || '';
 let savedAtsFlags  = localStorage.getItem('cara_sess_ats_flags') || '';
 let savedAtsPath   = localStorage.getItem('cara_sess_ats_path') || '';
@@ -3208,34 +3210,24 @@ document.getElementById('save-jd-btn').addEventListener('click', () => {
     if (roleEl && !roleEl.value && rolePart) roleEl.value = rolePart;
   }
   document.getElementById('jd-saved-msg').style.display = 'block';
-  updateNavProgress();
+  updatePipeline();
   updateJdContextBar();
-  {
-    const existingTrackerJob = savedTrackerJobId ? jobs.find(j => j.id === savedTrackerJobId) : null;
-    if (existingTrackerJob) {
-      existingTrackerJob.company = savedCompany || existingTrackerJob.company || '(see URL)';
-      existingTrackerJob.role = savedRoleTitle || savedRoleName || existingTrackerJob.role || 'Untitled Role';
-      existingTrackerJob.url = savedJDUrl || existingTrackerJob.url;
-      existingTrackerJob.workday = document.getElementById('jd-workday') ? document.getElementById('jd-workday').checked : existingTrackerJob.workday;
-    } else {
-      const newJob = {
-        id: Date.now().toString(),
-        company: savedCompany || '(see URL)',
-        role: savedRoleTitle || savedRoleName || 'Untitled Role',
-        url: savedJDUrl,
-        source: '',
-        notes: '',
-        dateAdded: new Date().toISOString(),
-        screening: false,
-        interview: false,
-        rejected: false,
-        hired: false,
-        workday: document.getElementById('jd-workday') ? document.getElementById('jd-workday').checked : false
-      };
-      jobs.unshift(newJob);
-      savedTrackerJobId = newJob.id;
-      localStorage.setItem('cara_sess_trackerid', savedTrackerJobId);
-    }
+  if (savedRoleName || savedJDUrl) {
+    const newJob = {
+      id: Date.now().toString(),
+      company: savedCompany || '(see URL)',
+      role: savedRoleTitle || savedRoleName,
+      url: savedJDUrl,
+      source: '',
+      notes: '',
+      dateAdded: new Date().toISOString(),
+      screening: false,
+      interview: false,
+      rejected: false,
+      hired: false,
+      workday: document.getElementById('jd-workday') ? document.getElementById('jd-workday').checked : false
+    };
+    jobs.unshift(newJob);
     saveJobs();
     renderJobs();
   }
@@ -3581,9 +3573,7 @@ Be specific and direct.`;
     // Inject full context into recheck chat so Claude can actually answer questions
     const _recheckResume = document.getElementById('updated-resume-text')?.value?.trim() || updatedResume || '';
     const _recheckJD = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
-    window._recheckLatestOutput = fullText;
-    const _recheckLeCtx = window._leLatestEditsText ? `\n\nLATEST LINE-BY-LINE EDITS (from the Line-by-Line Edits panel):\n${window._leLatestEditsText}` : '';
-    recheckChatSysPrompt = `You are a resume coach reviewing a revised resume ATS check with the candidate. You have full context — answer questions specifically. Be direct and concrete.\n\nATS ANALYSIS RESULTS:\n${fullText}\n\nREVISED RESUME:\n${_recheckResume}\n\nJOB DESCRIPTION:\n${_recheckJD}${_recheckLeCtx}\n\nAnswer questions about scores, gaps, improvements, or specific edits in 2-4 sentences. Always reference specific lines, sections, or scores from the context above. Never say you can't see the content — you have all of it above.`;
+    recheckChatSysPrompt = `You are a resume coach reviewing a revised resume ATS check with the candidate. You have full context — answer questions specifically. Be direct and concrete.\n\nATS ANALYSIS RESULTS:\n${fullText}\n\nREVISED RESUME:\n${_recheckResume}\n\nJOB DESCRIPTION:\n${_recheckJD}\n\nAnswer questions about scores, gaps, improvements, or specific edits in 2-4 sentences. Always reference specific lines, sections, or scores from the context above. Never say you can't see the content — you have all of it above.`;
     recheckChatHistory = [];
 
     // Wire up static tabs
@@ -3828,55 +3818,12 @@ async function callClaudeChat(systemPrompt,messages,onChunk){
   if(!res.ok)throw new Error('API error '+res.status);
   var data=await res.json(); var text=data.content[0].text; onChunk(text); return text;
 }
-
-// ─── SHARED AI CONTEXT (LE + Recheck chats read this, not just post-generation) ─
-function stripHtmlForContext(html) {
-  if (!html) return '';
-  const d = document.createElement('div');
-  d.innerHTML = html;
-  return (d.textContent || d.innerText || '').replace(/\s+/g, ' ').trim();
-}
-function buildSharedAiContext(resumeTextOverride) {
-  const parts = [];
-  const jd = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
-  if (jd) parts.push('JOB DESCRIPTION:\n' + jd);
-  if (savedRoleName) parts.push('ROLE / COMPANY: ' + savedRoleName);
-  const resumeText = resumeTextOverride
-    || document.getElementById('updated-resume-text')?.value?.trim()
-    || window._grResumeText
-    || (typeof selectedLeResume !== 'undefined' && RESUMES[selectedLeResume])
-    || (typeof atsHighestResume !== 'undefined' && atsHighestResume && RESUMES[atsHighestResume])
-    || '';
-  if (resumeText) parts.push('CANDIDATE RESUME:\n' + resumeText);
-  const atsKw = savedAtsKeywords || localStorage.getItem('cara_sess_ats_kw') || '';
-  if (atsKw) parts.push('ATS MISSING KEYWORDS:\n' + atsKw);
-  const atsPath = savedAtsPath || localStorage.getItem('cara_sess_ats_path') || '';
-  if (atsPath) parts.push('FASTEST PATH TO 95%+:\n' + atsPath);
-  const atsFlags = savedAtsFlags || localStorage.getItem('cara_sess_ats_flags') || '';
-  if (atsFlags) parts.push('ATS RED FLAGS & WINS:\n' + atsFlags);
-  if (window._leLatestEditsText) parts.push('LATEST LINE-BY-LINE EDITS GENERATED:\n' + window._leLatestEditsText);
-  if (window._recheckLatestOutput) parts.push('LATEST REVISED RESUME ATS CHECK RESULTS:\n' + window._recheckLatestOutput);
-  const companyResearch = stripHtmlForContext(localStorage.getItem('cara_intel_company-research'));
-  if (companyResearch) parts.push('COMPANY RESEARCH NOTES:\n' + companyResearch);
-  const salaryIntel = stripHtmlForContext(localStorage.getItem('cara_intel_salary-intel'));
-  if (salaryIntel) parts.push('SALARY & RECRUITER INTEL:\n' + salaryIntel);
-  return parts.join('\n\n');
-}
-function buildLeSysPrompt() {
-  const ctx = buildSharedAiContext();
-  return 'You are a resume editor helping tailor a resume against a specific job description. You have full context below — never ask the candidate to paste information that already appears in it. If something is genuinely missing, name that specific gap instead of asking them to re-paste everything.\n\n' + (ctx || '(Nothing saved yet — ask the candidate to save a job description in Step 05 and run ATS Check in Step 06 first.)');
-}
-function buildRecheckSysPrompt() {
-  const ctx = buildSharedAiContext();
-  return 'You are a resume coach reviewing a revised resume ATS check with the candidate. You have full context below — never ask the candidate to paste information that already appears in it. If something is genuinely missing, name that specific gap instead of asking them to re-paste everything.\n\n' + (ctx || '(Nothing saved yet — ask the candidate to save a job description in Step 05 first.)');
-}
-
 var whyHistory=[];
 var qaHistory=[];
 var leHistory=[];
 var whySysPrompt='';
 var qaSysPrompt='';
-var leSysPrompt='';
+var leSysPrompt='You are a resume editor. Generate Line-by-Line Edits first — your full ATS results, resume, and job description will be loaded into context automatically so you can answer questions and revise specific edits.';
 async function sendVariantChat(prefix,history,sysPrompt){
   var input=document.getElementById(prefix+'-chat-input');
   var thread=document.getElementById(prefix+'-chat-thread');
@@ -5711,11 +5658,10 @@ document.getElementById('new-application-btn').addEventListener('click', () => {
   const jdMsg = document.getElementById('jd-saved-msg'); if (jdMsg) jdMsg.style.display = 'none';
 
   // ── Session state ──────────────────────────────────────────────────────────
-  savedJD = ''; savedJDUrl = ''; savedRoleName = ''; savedCompany = ''; savedRoleTitle = ''; savedTrackerJobId = '';
+  savedJD = ''; savedJDUrl = ''; savedRoleName = ''; savedCompany = ''; savedRoleTitle = '';
   savedAtsKeywords = ''; savedAtsFlags = ''; savedAtsPath = '';
   atsHighestResume = null;
-  window._leLatestEditsText = null; window._recheckLatestOutput = null; window._grResumeText = null;
-  ['cara_sess_jd','cara_sess_jdurl','cara_sess_rolename','cara_sess_company','cara_sess_roletitle','cara_sess_trackerid',
+  ['cara_sess_jd','cara_sess_jdurl','cara_sess_rolename','cara_sess_company','cara_sess_roletitle',
    'cara_sess_ats_kw','cara_sess_ats_flags','cara_sess_ats_path','cara_sess_ats_highest',
    'cara_intel_company-research','cara_intel_interview-prep',
    'cara_intel_linkedin-outreach','cara_intel_salary-intel'].forEach(k => localStorage.removeItem(k));
@@ -5728,14 +5674,12 @@ document.getElementById('new-application-btn').addEventListener('click', () => {
   const rcResult = document.getElementById('recheck-result'); if (rcResult) rcResult.classList.remove('visible');
   const rcScore = document.getElementById('recheck-score-card'); if (rcScore) { rcScore.style.display = 'none'; rcScore.innerHTML = ''; }
   const updatedTA = document.getElementById('updated-resume-text'); if (updatedTA) updatedTA.value = '';
-  const recheckChatThread = document.getElementById('recheck-chat-thread'); if (recheckChatThread) recheckChatThread.innerHTML = '';
-  recheckChatHistory = []; recheckChatSysPrompt = buildRecheckSysPrompt();
 
   // ── Line-by-Line Edits ─────────────────────────────────────────────────────
   const leOut = document.getElementById('le-output'); if (leOut) leOut.innerHTML = '';
   const leChatEl = document.getElementById('le-chat'); if (leChatEl) leChatEl.style.display = 'none';
   const leChatThread = document.getElementById('le-chat-thread'); if (leChatThread) leChatThread.innerHTML = '';
-  leHistory = []; leSysPrompt = buildLeSysPrompt();
+  leHistory = []; leSysPrompt = '';
   const leResult = document.getElementById('le-result'); if (leResult) leResult.classList.remove('visible');
   const leTracker = document.getElementById('le-score-tracker'); if (leTracker) leTracker.style.display = 'none';
   const selBtns = document.getElementById('le-sel-btns'); if (selBtns) selBtns.style.display = 'none';
@@ -5787,13 +5731,8 @@ document.getElementById('new-application-btn').addEventListener('click', () => {
   setTimeout(populateIntelDropdowns, 50);
 
   // ── Nav done dots ──────────────────────────────────────────────────────────
-  document.querySelectorAll('nav a.nav-done').forEach(l => {
-    l.classList.remove('nav-done');
-    const numEl = l.querySelector('.num');
-    if (numEl && numEl.dataset.num) numEl.textContent = numEl.dataset.num;
-  });
+  document.querySelectorAll('nav a.nav-done').forEach(l => l.classList.remove('nav-done'));
   localStorage.removeItem('cara_nav_done');
-  updateNavProgress();
 
   // ── Navigate to JD panel ───────────────────────────────────────────────────
   document.querySelectorAll('nav a').forEach(l => l.classList.remove('active'));
@@ -5935,10 +5874,8 @@ Output nothing else — just the EDIT_SUMMARY line followed by the edit blocks.$
     const _leJD = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
     const _leAtsScores = savedAtsKeywords || localStorage.getItem('cara_sess_ats_kw') || '';
     const _leAtsPath = savedAtsPath || localStorage.getItem('cara_sess_ats_path') || '';
-    const _leResume = (window._grResumeText) || (RESUMES && RESUMES[selectedLeResume]) || '';
-    window._leLatestEditsText = fullText;
-    const _leRecheckCtx = window._recheckLatestOutput ? `\n\nLATEST REVISED RESUME ATS CHECK RESULTS (from the Revised Resume Check panel):\n${window._recheckLatestOutput}` : '';
-    leSysPrompt = `You are a resume editor reviewing line-by-line edits with the candidate. You have two modes:\n\nMODE 1 — EDIT REVISION: If the candidate references a specific edit number (e.g. "Edit 3", "#7", "edit 14") or asks to change a specific BEFORE/AFTER pair, respond with a revised block in this EXACT format and nothing else before it:\n\nREVISED_EDIT: [edit number]\nAFTER: [complete revised text, ready to paste]\nWHY: [one sentence on what changed and why]\n\nMODE 2 — GENERAL CONTEXT: If they provide general context, corrections, or answer a question, respond in 2-3 sentences confirming how it will affect the resume when they click Generate Resume. Be specific about which sections or bullets are affected. Never say you can't see the content — you have all of it below.\n\nJOB DESCRIPTION:\n${_leJD}\n\nATS MISSING KEYWORDS:\n${_leAtsScores}\n\nFASTEST PATH TO 95%+:\n${_leAtsPath}\n\nRESUME BEING EDITED:\n${_leResume}\n\nCurrent edit list:\n${fullText}${_leRecheckCtx}`;
+    const _leResume = (window._grResumeText) || (window.RESUMES && window.RESUMES[selectedLeResume]) || '';
+    leSysPrompt = `You are a resume editor reviewing line-by-line edits with the candidate. You have two modes:\n\nMODE 1 — EDIT REVISION: If the candidate references a specific edit number (e.g. "Edit 3", "#7", "edit 14") or asks to change a specific BEFORE/AFTER pair, respond with a revised block in this EXACT format and nothing else before it:\n\nREVISED_EDIT: [edit number]\nAFTER: [complete revised text, ready to paste]\nWHY: [one sentence on what changed and why]\n\nMODE 2 — GENERAL CONTEXT: If they provide general context, corrections, or answer a question, respond in 2-3 sentences confirming how it will affect the resume when they click Generate Resume. Be specific about which sections or bullets are affected.\n\nJOB DESCRIPTION:\n${_leJD}\n\nATS MISSING KEYWORDS:\n${_leAtsScores}\n\nFASTEST PATH TO 95%+:\n${_leAtsPath}\n\nRESUME BEING EDITED:\n${_leResume}\n\nCurrent edit list:\n${fullText}`;
     const leChatEl = document.getElementById('le-chat');
     if (leChatEl) leChatEl.style.display = 'block';
 
@@ -5953,10 +5890,8 @@ Output nothing else — just the EDIT_SUMMARY line followed by the edit blocks.$
 document.getElementById('le-chat-send').addEventListener('click', function(){ sendLeChat(); });
 document.getElementById('le-chat-input').addEventListener('keydown', function(e){ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) sendLeChat(); });
 
-leSysPrompt = buildLeSysPrompt();
-
 var recheckChatHistory = [];
-var recheckChatSysPrompt = buildRecheckSysPrompt();
+var recheckChatSysPrompt = 'You are a resume coach reviewing a revised resume ATS check with the candidate. Run the Revised Resume Check first — your full ATS results, resume, and job description will be loaded into context automatically so you can answer questions specifically.';
 
 async function sendRecheckChat() {
   var input = document.getElementById('recheck-chat-input');
@@ -6706,26 +6641,12 @@ function markNavDone(panelId) {
   const done = JSON.parse(localStorage.getItem('cara_nav_done') || '[]');
   if (!done.includes(panelId)) { done.push(panelId); localStorage.setItem('cara_nav_done', JSON.stringify(done)); }
   const link = document.querySelector(`nav a[data-panel="${panelId}"]`);
-  if (link) {
-    link.classList.add('nav-done');
-    const numEl = link.querySelector('.num');
-    if (numEl) { if (!numEl.dataset.num) numEl.dataset.num = numEl.textContent; numEl.textContent = '✓'; }
-  }
-  if (typeof updateNavProgress === 'function') updateNavProgress();
-  if (typeof updateJdContextBar === 'function') updateJdContextBar();
+  if (link) link.classList.add('nav-done');
 }
 
 function updateNavStates() {
   const done = JSON.parse(localStorage.getItem('cara_nav_done') || '[]');
-  done.forEach(p => {
-    const l = document.querySelector(`nav a[data-panel="${p}"]`);
-    if (l) {
-      l.classList.add('nav-done');
-      const numEl = l.querySelector('.num');
-      if (numEl) { if (!numEl.dataset.num) numEl.dataset.num = numEl.textContent; numEl.textContent = '✓'; }
-    }
-  });
-  updateNavProgress();
+  done.forEach(p => { const l = document.querySelector(`nav a[data-panel="${p}"]`); if (l) l.classList.add('nav-done'); });
 }
 
 // ─── WORD DIFF (#10) ──────────────────────────────────────────────────────────
@@ -7760,19 +7681,56 @@ const PIPELINE_STEPS = [
   { key: 'interview-prep',   label: 'Interview Prep',  num: '15' },
 ];
 
-function updateNavProgress() {
-  const wrap = document.getElementById('nav-progress');
-  if (!wrap) return;
-  if (!savedJD) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
+function updatePipeline() {
+  const bar = document.getElementById('pipeline-bar');
+  const stepsEl = document.getElementById('pipeline-steps');
+  const fill = document.getElementById('pipeline-fill');
+  const glow = document.getElementById('pipeline-glow');
+  const summary = document.getElementById('pipeline-summary');
+  const cta = document.getElementById('pipeline-cta');
+  if (!bar || !stepsEl) return;
+
+  if (!savedJD) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
 
   const done = JSON.parse(localStorage.getItem('cara_nav_done') || '[]');
-  const doneCount = PIPELINE_STEPS.filter(s => done.includes(s.key)).length;
-  const pct = Math.round((doneCount / PIPELINE_STEPS.length) * 100);
+  const activePanel = document.querySelector('nav a.active')?.dataset?.panel || '';
+  const activeIdx = PIPELINE_STEPS.findIndex(s => s.key === activePanel);
 
-  document.getElementById('nav-progress-label').textContent = doneCount + ' of ' + PIPELINE_STEPS.length + ' steps';
-  document.getElementById('nav-progress-pct').textContent = pct + '%';
-  document.getElementById('nav-progress-fill').style.width = pct + '%';
+  let doneCount = 0;
+  let firstIncomplete = null;
+
+  stepsEl.innerHTML = PIPELINE_STEPS.map((step, i) => {
+    const isDone = done.includes(step.key);
+    const isActive = step.key === activePanel;
+    if (isDone) doneCount++;
+    else if (!firstIncomplete) firstIncomplete = step;
+    const col = isDone ? '#3fa040' : isActive ? '#ffffff' : '#333';
+    const bg = isDone ? '#3fa040' : isActive ? '#ffffff' : '#1a1a1a';
+    const textCol = isDone ? '#4caf80' : isActive ? '#ffffff' : '#444';
+    const icon = isDone ? '✓' : isActive ? '→' : step.num;
+    const score = isDone && step.key === 'ats-check' && atsHighestResume ? '' : '';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;position:relative;">
+      ${i < PIPELINE_STEPS.length - 1 ? `<div style="position:absolute;top:10px;left:calc(50% + 12px);right:calc(-50% + 12px);height:1.5px;background:${isDone?'#3fa040':'#1e1e1e'};z-index:0;"></div>` : ''}
+      <div style="width:22px;height:22px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${isDone?'#fff':isActive?'#000':'#555'};position:relative;z-index:1;margin-bottom:5px;">${icon}</div>
+      <div style="font-size:9px;font-weight:500;color:${textCol};text-align:center;line-height:1.3;white-space:nowrap;">${step.label}</div>
+    </div>`;
+  }).join('');
+
+  const pct = Math.round((doneCount / PIPELINE_STEPS.length) * 100);
+  fill.style.width = pct + '%';
+  glow.style.left = pct + '%';
+
+  const role = savedRoleName || savedRoleTitle || 'current application';
+  summary.innerHTML = `<strong style="color:#4caf80;">${doneCount} of ${PIPELINE_STEPS.length} steps done</strong> &nbsp;·&nbsp; ${escHtml(role)}`;
+
+  if (firstIncomplete && firstIncomplete.key !== activePanel) {
+    cta.style.display = 'block';
+    cta.textContent = 'Next: ' + firstIncomplete.label + ' →';
+    cta.onclick = () => document.querySelector(`nav a[data-panel="${firstIncomplete.key}"]`)?.click();
+  } else {
+    cta.style.display = 'none';
+  }
 }
 
 function updateJdContextBar() {
@@ -7814,15 +7772,23 @@ if (_origFitEl) {
   _fitObs.observe(_origFitEl, { childList: true, characterData: true, subtree: true });
 }
 
-// Hook nav progress + context bar into nav clicks
+// Hook pipeline + context bar into nav clicks
 (function() {
   const origNav = document.querySelector('nav');
   if (origNav) {
     origNav.addEventListener('click', function() {
-      setTimeout(() => { updateNavProgress(); updateJdContextBar(); }, 50);
+      setTimeout(() => { updatePipeline(); updateJdContextBar(); }, 50);
     });
   }
 })();
+
+// Hook into markNavDone to update pipeline
+const _origMarkNavDone = markNavDone;
+const markNavDoneWithPipeline = function(panelId) {
+  _origMarkNavDone(panelId);
+  setTimeout(() => { updatePipeline(); updateJdContextBar(); }, 100);
+};
+window.markNavDone = markNavDoneWithPipeline;
 
 // ─── SMART NEXT-STEP NUDGE ────────────────────────────────────────────────────
 
@@ -8056,6 +8022,7 @@ renderAllOptimizers();
   }
   renderDashboard();
   updateNavStates();
+  updatePipeline();
   updateJdContextBar();
   addDeadlineToManualForm();
   setTimeout(maybeAutoFocus, 800);
@@ -8467,12 +8434,12 @@ function saRenderResults(data, fromCache){
   if (rerunBtn) rerunBtn.style.display = 'inline-block';
 
   const cl = data.checklist || {};
-  const badgeLabel = { priority:'PRIORITY', jd:'PER JD', resolved:'RESOLVED', ok:'✓ CLEAN' };
+  const badgeLabel = { priority:'PRIORITY', jd:'RE-TAILOR', resolved:'RESOLVED', ok:'✓ CLEAN' };
   const badgeClass = { priority:'sa-b-pri', jd:'sa-b-jd', resolved:'sa-b-res', ok:'sa-b-ok' };
   function saItemsHtml(items, prefix){
     return (items||[]).map((it,i) => {
       const b = it.badge || 'jd';
-      return '<li class="sa-cl-item"><input type="checkbox" id="'+prefix+i+'"><label for="'+prefix+i+'"><span class="sa-badge '+(badgeClass[b]||'sa-b-jd')+'">'+(badgeLabel[b]||'PER JD')+'</span>'+escHtml(it.text||'')+'</label></li>';
+      return '<li class="sa-cl-item"><input type="checkbox" id="'+prefix+i+'"><label for="'+prefix+i+'"><span class="sa-badge '+(badgeClass[b]||'sa-b-jd')+'">'+(badgeLabel[b]||'RE-TAILOR')+'</span>'+escHtml(it.text||'')+'</label></li>';
     }).join('');
   }
   let clHtml = '';

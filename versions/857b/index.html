@@ -1470,11 +1470,11 @@
 
       <div style="display:flex;gap:1.5rem;align-items:flex-start;">
 
-        <!-- LEFT: Claude Chat -->
-        <div style="width:300px;flex-shrink:0;position:sticky;top:1rem;">
+        <!-- LEFT: Claude Chat (hidden until line-by-line edits are generated) -->
+        <div id="le-chat-column" style="width:300px;flex-shrink:0;position:sticky;top:1rem;display:none;">
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;background:#fff;">
             <div style="padding:0.65rem 1rem;background:var(--black);font-family:'Raleway',sans-serif;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;color:#fff;">Claude Chat</div>
-            <div style="padding:0.5rem 0.9rem 0.4rem;font-size:0.72rem;color:var(--mid);border-bottom:1px solid var(--border);line-height:1.4;">Reference a specific edit by number to revise it ("Edit 5 should say…"). Add context or corrections to shape the resume. After Generate Resume, editor's notes appear here.</div>
+            <div style="padding:0.5rem 0.9rem 0.4rem;font-size:0.72rem;color:var(--mid);border-bottom:1px solid var(--border);line-height:1.4;">Add notes or context to shape your edits. Reference a specific edit by number to revise it ("Edit 5 should say…"). After chatting, click Generate Line-by-Line Edits to turn your notes into new edit blocks.</div>
             <div id="le-chat-thread" style="height:340px;overflow-y:auto;padding:0.75rem;display:flex;flex-direction:column;gap:0.5rem;"></div>
             <div style="border-top:1px solid var(--border);">
               <textarea id="le-chat-input" rows="3" placeholder="e.g., I also led a $4M digital transformation… or Ask me about my clearance level…" style="width:100%;box-sizing:border-box;border:none;border-bottom:1px solid var(--border);padding:0.6rem 0.75rem;font-size:0.82rem;font-family:inherit;resize:none;background:transparent;color:var(--black);"></textarea>
@@ -1548,12 +1548,11 @@
                 <div>
                   <div style="font-family:'Raleway',sans-serif;font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);margin-bottom:0.3rem;">Next Step</div>
                   <strong style="font-size:1rem;font-family:'Open Sans',sans-serif;color:var(--black);">Generate Full Resume with Selected Edits</strong>
-                  <div style="font-size:0.8rem;color:var(--mid);margin-top:0.3rem;">Check the edits above, then click Generate. The AI applies only your selected edits to produce the complete updated resume.</div>
+                  <div style="font-size:0.8rem;color:var(--mid);margin-top:0.3rem;">Check the edits above, then click Generate. Selected edits are applied directly to produce the complete updated resume — no AI call needed.</div>
                 </div>
-                <button class="btn btn-ghost" id="patch-resume-btn" onclick="patchResumeFromEdits(this)" title="Apply selected edits directly — faster, no AI needed">⚡ Patch (quick apply)</button>
-                <button class="btn" id="gen-resume-btn" onclick="generateResumeFromEdits(this)">Generate Resume</button>
+                <button class="btn" id="gen-resume-btn" onclick="generateResumeFromEdits(this)" title="Apply selected edits directly to the resume — fast, no AI call needed">Generate Resume</button>
               </div>
-              <div class="loading" id="gr-loading" style="display:none;"><div class="spinner"></div>Applying edits and generating resume…</div>
+              <div class="loading" id="gr-loading" style="display:none;"><div class="spinner"></div>Applying selected edits…</div>
               <div class="error-msg" id="gr-error"></div>
               <div class="result-box" id="gr-result" style="display:none;margin-top:1rem;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
@@ -1615,7 +1614,7 @@
         <div style="flex:1;min-width:0;">
           <label>Updated Resume Text *</label>
           <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.4rem;">
-            <button class="btn btn-ghost" style="font-size:0.72rem;padding:0.3rem 0.75rem;" onclick="(function(){const leText=document.getElementById('le-output');if(!leText||!leText.innerText.trim()){alert('No updated resume found on the Line-by-Line Edits page.');return;}const ta=document.getElementById('updated-resume-text');if(ta){ta.value=window._grResumeText||leText.innerText.trim();}})()">← Load from Line Edits</button>
+            <button class="btn btn-ghost" style="font-size:0.72rem;padding:0.3rem 0.75rem;" onclick="(function(){if(!window._grResumeText||!window._grResumeText.trim()){alert('No generated resume found. Generate a resume on the Line-by-Line Edits page first.');return;}const ta=document.getElementById('updated-resume-text');if(ta){ta.value=window._grResumeText;}})()">← Load from Line Edits</button>
           </div>
           <textarea id="updated-resume-text" placeholder="Paste your updated resume text here…" rows="14"></textarea>
           <div style="display:flex;gap:0.5rem;margin-top:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;align-items:center;">
@@ -3336,7 +3335,7 @@ Be specific and direct.`;
     // Inject full context into recheck chat so Claude can actually answer questions
     const _recheckResume = document.getElementById('updated-resume-text')?.value?.trim() || updatedResume || '';
     const _recheckJD = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
-    recheckChatSysPrompt = `You are a resume coach reviewing a revised resume ATS check with the candidate. You have full context — answer questions specifically. Be direct and concrete.\n\nATS ANALYSIS RESULTS:\n${fullText}\n\nREVISED RESUME:\n${_recheckResume}\n\nJOB DESCRIPTION:\n${_recheckJD}\n\nAnswer questions about scores, gaps, improvements, or specific edits in 2-4 sentences. Always reference specific lines, sections, or scores from the context above. Never say you can't see the content — you have all of it above.`;
+    recheckChatSysPrompt = buildRecheckSysPrompt();
     recheckChatHistory = [];
 
     // Wire up static tabs
@@ -3384,6 +3383,7 @@ Be specific and direct.`;
       const textareaResume = document.getElementById('updated-resume-text')?.value?.trim();
       const latestResume = textareaResume || window._grResumeText || updatedResume;
       if (textareaResume) window._grResumeText = textareaResume;
+      window._leBaseResumeText = latestResume;
       if (!jd2 || !latestResume) return;
       const sp2 = `You are a senior resume editor. PERSPECTIVE: You are advising from the point of view of a hiring manager. What problems does this role solve at a company like this? How do I empower Cara to position herself as that solution?\n\nYou produce precise, surgical edits — exact original text, exact replacement, and one-line reason. Never invent experience not in the resume.`;
 const um2 = `You are given a resume, a job description, and a set of recommendations from an ATS analysis. Your job is to translate each recommendation into a precise, surgical edit block.\n\nFor each recommendation:\n1. Find the EXACT line in the resume it refers to\n2. Rewrite only what needs changing\n3. Output in the structured format below\n\nRESUME:\n${latestResume}\n\nJOB DESCRIPTION:\n${jd2}\n\nRECOMMENDATIONS TO TRANSLATE:\n${fullText}\n\nFirst output this exact summary line:\nEDIT_SUMMARY: [N] edits needed | Projected score: [XX]% → 96%+\n\nThen for each recommendation output a block in this EXACT format:\n\nSECTION: [section name — for Professional History include company name e.g. "Professional History — Kroger"]\nCONTEXT: [copy the 1-2 lines immediately surrounding the BEFORE line in the resume]\nBEFORE: [copy the exact original line from the resume verbatim — do not paraphrase]\nAFTER: [your rewritten version, ready to paste — no subsection label if Highlights, punctuation matched to context]\nTYPE: [Full Sentence | Partial Sentence | Full Bullet | Partial Bullet | Paragraph | List Entry]\nSCORE_IMPACT: [estimated ATS point gain for this single edit, whole number]\nWHY: [one sentence explaining the specific improvement]\n\nRULES:\n- BEFORE must be copied verbatim from the resume — never invented\n- AFTER must be complete and ready to paste with no placeholders\n- Only make changes that are honest wordsmithing of existing experience\n- Never invent titles, companies, credentials or skills not in the resume\n- ABSOLUTE BAN — never insert spaces between individual letters in any AFTER text. "A R E A S O F E X P E R T I S E" is forbidden. Write unspaced words only.`;      const leOutput = document.getElementById('le-output');
@@ -3608,7 +3608,100 @@ async function sendVariantChat(prefix,history,sysPrompt){
   finally{loading.style.display='none';}
 }
 
+function buildSiteContext() {
+  const jd = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
+  const atsScores = savedAtsKeywords || localStorage.getItem('cara_sess_ats_kw') || '';
+  const atsPath = savedAtsPath || localStorage.getItem('cara_sess_ats_path') || '';
+  const currentResume = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
+  const originalResume = RESUMES[selectedLeResume]?.text || '';
+  const updatedTA = document.getElementById('updated-resume-text');
+  const revisedResume = (updatedTA && updatedTA.value.trim()) ? updatedTA.value.trim() : (window._grResumeText || '');
+  const leOutput = document.getElementById('le-output');
+  const editList = (leOutput && leOutput.innerText.trim()) ? leOutput.innerText.trim() : '';
+  const recheckOut = document.getElementById('recheck-keywords-output');
+  const recheckResults = (recheckOut && recheckOut.innerText.trim()) ? recheckOut.innerText.trim() : '';
+  return { jd, atsScores, atsPath, currentResume, originalResume, revisedResume, editList, recheckResults };
+}
+
+function buildLeSysPrompt(jd, atsScores, atsPath, resume, editList) {
+  const ctx = (typeof buildSiteContext === 'function') ? null : null; // already have params
+  const recheckOut = document.getElementById('recheck-keywords-output');
+  const recheckResults = (recheckOut && recheckOut.innerText.trim()) ? recheckOut.innerText.trim().substring(0, 2000) : '';
+  return `You are a resume editor reviewing line-by-line edits with the candidate. You have two modes:
+
+MODE 1 \u2014 EDIT REVISION: If the candidate references a specific edit number (e.g. "Edit 3", "#7", "edit 14") or asks to change a specific BEFORE/AFTER pair, respond with a revised block in this EXACT format and nothing else before it:
+
+REVISED_EDIT: [edit number]
+AFTER: [complete revised text, ready to paste]
+WHY: [one sentence on what changed and why]
+
+MODE 2 \u2014 GENERAL CONTEXT: If they provide general context, corrections, or answer a question, respond in 2-3 sentences confirming how it will affect the resume when they click Generate Resume. Be specific about which sections or bullets are affected.
+
+FULL SITE CONTEXT \u2014 you have access to all of the following:
+
+JOB DESCRIPTION:
+${jd}
+
+ATS MISSING KEYWORDS:
+${atsScores}
+
+FASTEST PATH TO 95%+:
+${atsPath}
+
+ORIGINAL RESUME:
+${RESUMES[selectedLeResume]?.text || ''}
+
+CURRENT REVISED RESUME (after edits applied):
+${resume}
+
+CURRENT EDIT LIST:
+${editList}
+
+REVISED RESUME CHECK RESULTS (from page 07, if available):
+${recheckResults}
+
+Never say you can't see the content \u2014 you have all of it above. Always reference specific lines, sections, or scores when answering.`;
+}
+
+function buildRecheckSysPrompt() {
+  const ctx = buildSiteContext();
+  return `You are a resume coach reviewing a revised resume ATS check with the candidate. You have full context \u2014 answer questions specifically. Be direct and concrete.
+
+FULL SITE CONTEXT \u2014 you have access to all of the following:
+
+JOB DESCRIPTION:
+${ctx.jd}
+
+ATS MISSING KEYWORDS:
+${ctx.atsScores}
+
+FASTEST PATH TO 95%+:
+${ctx.atsPath}
+
+ORIGINAL RESUME:
+${ctx.originalResume}
+
+CURRENT REVISED RESUME (from textbox):
+${ctx.revisedResume}
+
+CURRENT LINE-BY-LINE EDITS (from page 06):
+${ctx.editList}
+
+REVISED RESUME CHECK RESULTS:
+${ctx.recheckResults}
+
+Answer questions about scores, gaps, improvements, or specific edits in 2-4 sentences. Always reference specific lines, sections, or scores from the context above. Never say you can't see the content \u2014 you have all of it above.`;
+}
+
 async function sendLeChat(){
+  // Rebuild system prompt with latest site context before each send
+  var _jd = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
+  var _atsKw = savedAtsKeywords || localStorage.getItem('cara_sess_ats_kw') || '';
+  var _atsPath = savedAtsPath || localStorage.getItem('cara_sess_ats_path') || '';
+  var _resume = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
+  var _leOut = document.getElementById('le-output');
+  var _editList = (_leOut && _leOut.innerText.trim()) ? _leOut.innerText.trim() : '';
+  leSysPrompt = buildLeSysPrompt(_jd, _atsKw, _atsPath, _resume, _editList);
   var input=document.getElementById('le-chat-input');
   var thread=document.getElementById('le-chat-thread');
   var loading=document.getElementById('le-chat-loading');
@@ -5441,6 +5534,7 @@ document.getElementById('new-application-btn').addEventListener('click', () => {
   // ── Line-by-Line Edits ─────────────────────────────────────────────────────
   const leOut = document.getElementById('le-output'); if (leOut) leOut.innerHTML = '';
   const leChatEl = document.getElementById('le-chat'); if (leChatEl) leChatEl.style.display = 'none';
+  const leChatCol = document.getElementById('le-chat-column'); if (leChatCol) leChatCol.style.display = 'none';
   const leChatThread = document.getElementById('le-chat-thread'); if (leChatThread) leChatThread.innerHTML = '';
   leHistory = []; leSysPrompt = '';
   const leResult = document.getElementById('le-result'); if (leResult) leResult.classList.remove('visible');
@@ -5544,7 +5638,10 @@ document.getElementById('gen-edits-btn').addEventListener('click', async () => {
   const jd = savedJD || document.getElementById('jd-text').value.trim();
   if (!jd) { showError('le-error', 'Please save a job description in Step 01 first.'); return; }
 
-  const resume = RESUMES[selectedLeResume];
+  // Detect round 2+ — a revised resume already exists from a prior generate
+  const isRound2 = window._grResumeText && window._grResumeText.trim() && (window._leChatIndexAtLastResumeGenerate !== undefined);
+  const baseResumeText = isRound2 ? window._grResumeText : RESUMES[selectedLeResume]?.text;
+  const resume = isRound2 ? { label: 'Revised Resume (Round 2+)', text: baseResumeText } : RESUMES[selectedLeResume];
   const additionalExp = (document.getElementById('le-additional-exp').value || '').trim();
   const focusMap = {
     full: 'every section of the resume — synopsis, core competencies, and all experience bullets',
@@ -5613,7 +5710,7 @@ EDITING RULES:
 - If a bullet needs a keyword added, work it in naturally at the start or end
 - For competencies, add missing keyword clusters as new pipe-separated entries only if they reflect actual skills
 
-Output nothing else — just the EDIT_SUMMARY line followed by the edit blocks.${additionalExp ? `\n\nADDITIONAL EXPERIENCE TO INCORPORATE:\nThe candidate has provided additional experience not currently in the resume. For each item below, generate an INSERT block showing exactly where and how to add it. Use this format:\n\nSECTION: [best section to insert into]\nCONTEXT: [the line it should appear near]\nBEFORE: INSERT\nAFTER: [the new line or bullet, complete and ready to paste]\nTYPE: [Insert]\nWHY: [one sentence on why this addition improves ATS match]\n\nAdditional experience:\n${additionalExp}` : ''}${(()=>{const cn=leHistory.filter(m=>m.role==='user').map(m=>m.content).join('\n').trim();return cn?`\n\nCANDIDATE CHAT NOTES (incorporate into your edits — for any edit directly informed by these notes, add SOURCE: CHAT on a new line after WHY):\n${cn}`:'';})()} `;
+Output nothing else — just the EDIT_SUMMARY line followed by the edit blocks.${additionalExp ? `\n\nADDITIONAL EXPERIENCE TO INCORPORATE:\nThe candidate has provided additional experience not currently in the resume. For each item below, generate an INSERT block showing exactly where and how to add it. Use this format:\n\nSECTION: [best section to insert into]\nCONTEXT: [the line it should appear near]\nBEFORE: INSERT\nAFTER: [the new line or bullet, complete and ready to paste]\nTYPE: [Insert]\nWHY: [one sentence on why this addition improves ATS match]\n\nAdditional experience:\n${additionalExp}` : ''}${(()=>{const startIdx=isRound2?(window._leChatIndexAtLastResumeGenerate||0):0;const cn=leHistory.filter((m,i)=>m.role==='user'&&i>=startIdx).map(m=>m.content).join('\n').trim();if(!cn)return'';if(isRound2){return`\n\nCANDIDATE CHAT NOTES (these are NEW notes from the candidate since the last resume was generated — generate ONLY incremental edits for these notes, do NOT re-list edits already applied to the resume):\n${cn}`;}return`\n\nCANDIDATE CHAT NOTES (incorporate into your edits — for any edit directly informed by these notes, add SOURCE: CHAT on a new line after WHY):\n${cn}`;})()} ${isRound2?'\n\nIMPORTANT: This is Round 2+. The resume you are editing already has prior edits applied. Generate ONLY new, incremental edits based on the candidate\'s new chat notes and any remaining ATS gaps. Do NOT re-suggest edits that were already applied.':''}`;
 
   try {
     const output = document.getElementById('le-output');
@@ -5632,15 +5729,19 @@ Output nothing else — just the EDIT_SUMMARY line followed by the edit blocks.$
     initLeScoreTracker(fullText);
     // Save impactful edits to resume optimizer store
     saveEditsForOptimizers(fullText, selectedLeResume);
+    // Store the base resume snapshot that these edits were generated against
+    window._leBaseResumeText = baseResumeText;
     // Show chat + init history
     leHistory = [{role:'user',content:userMsg},{role:'assistant',content:fullText}];
     const _leJD = savedJD || document.getElementById('jd-text')?.value?.trim() || '';
     const _leAtsScores = savedAtsKeywords || localStorage.getItem('cara_sess_ats_kw') || '';
     const _leAtsPath = savedAtsPath || localStorage.getItem('cara_sess_ats_path') || '';
-    const _leResume = (window._grResumeText) || (window.RESUMES && window.RESUMES[selectedLeResume]) || '';
-    leSysPrompt = `You are a resume editor reviewing line-by-line edits with the candidate. You have two modes:\n\nMODE 1 — EDIT REVISION: If the candidate references a specific edit number (e.g. "Edit 3", "#7", "edit 14") or asks to change a specific BEFORE/AFTER pair, respond with a revised block in this EXACT format and nothing else before it:\n\nREVISED_EDIT: [edit number]\nAFTER: [complete revised text, ready to paste]\nWHY: [one sentence on what changed and why]\n\nMODE 2 — GENERAL CONTEXT: If they provide general context, corrections, or answer a question, respond in 2-3 sentences confirming how it will affect the resume when they click Generate Resume. Be specific about which sections or bullets are affected.\n\nJOB DESCRIPTION:\n${_leJD}\n\nATS MISSING KEYWORDS:\n${_leAtsScores}\n\nFASTEST PATH TO 95%+:\n${_leAtsPath}\n\nRESUME BEING EDITED:\n${_leResume}\n\nCurrent edit list:\n${fullText}`;
+    const _leResume = (window._grResumeText) || RESUMES[selectedLeResume]?.text || '';
+    leSysPrompt = buildLeSysPrompt(_leJD, _leAtsScores, _leAtsPath, _leResume, fullText);
     const leChatEl = document.getElementById('le-chat');
     if (leChatEl) leChatEl.style.display = 'block';
+    const leChatCol = document.getElementById('le-chat-column');
+    if (leChatCol) leChatCol.style.display = 'block';
 
   } catch (err) {
     showError('le-error', 'Something went wrong: ' + err.message);
@@ -5657,6 +5758,8 @@ var recheckChatHistory = [];
 var recheckChatSysPrompt = 'You are a resume coach reviewing a revised resume ATS check with the candidate. Run the Revised Resume Check first — your full ATS results, resume, and job description will be loaded into context automatically so you can answer questions specifically.';
 
 async function sendRecheckChat() {
+  // Rebuild system prompt with latest site context before each send
+  recheckChatSysPrompt = buildRecheckSysPrompt();
   var input = document.getElementById('recheck-chat-input');
   var thread = document.getElementById('recheck-chat-thread');
   var loading = document.getElementById('recheck-chat-loading');
@@ -6811,47 +6914,38 @@ document.addEventListener('change', function(e) {
 
 // ─── GENERATE RESUME FROM SELECTED EDITS ──────────────────────────────────────
 
-function patchResumeFromEdits(btn) {
-  const baseResume = RESUMES[selectedLeResume]?.text || window._grResumeText || '';
-  if (!baseResume) { alert('No base resume selected.'); return; }
-  const blocks = document.querySelectorAll('#le-output .edit-block');
+function applyEditsDirectly(baseResume, checkedEdits) {
   let patched = baseResume;
   let applied = 0, skipped = 0;
-  blocks.forEach(b => {
-    const cb = b.querySelector('input[type="checkbox"]');
-    if (!cb || !cb.checked) return;
-    const before = b.dataset.before || '';
-    const after = b.dataset.after || '';
-    const isInsert = b.dataset.isinsert === 'true';
-    if (isInsert) {
-      patched += '\n' + after;
+  const skippedEdits = [];
+  checkedEdits.forEach((e, i) => {
+    if (e.isInsert) {
+      patched += '\n' + e.after;
       applied++;
-    } else if (before && patched.includes(before)) {
-      patched = patched.replace(before, after);
+    } else if (e.before && patched.includes(e.before)) {
+      patched = patched.replace(e.before, e.after);
       applied++;
     } else {
       skipped++;
+      skippedEdits.push(i + 1);
     }
   });
-  if (applied === 0) { alert('No checked edits could be matched to the resume text. Use Generate Resume instead.'); return; }
-  window._grResumeText = patched;
-  const rcTa = document.getElementById('updated-resume-text');
-  if (rcTa) rcTa.value = patched;
-  document.getElementById('gr-output').innerHTML = renderResumePreview(patched);
-  document.getElementById('gr-result').style.display = 'block';
-  storeResumeVersion(patched, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
-  if (btn) {
-    const orig = btn.textContent;
-    btn.textContent = `✓ ${applied} edit${applied>1?'s':''} applied${skipped?' ('+skipped+' skipped)':''}`;
-    btn.style.color = 'var(--success)';
-    btn.style.borderColor = 'var(--success)';
-    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
-  }
+  return { patched, applied, skipped, skippedEdits };
 }
 
-async function generateResumeFromEdits(btn) {
-  const baseResume = RESUMES[selectedLeResume]?.text || '';
-  if (!baseResume) { alert('No base resume is selected. Select one in the Line-by-Line Edits tab.'); return; }
+function validateResumeOutput(text, baseResume) {
+  if (!text || !text.trim()) return { valid: false, reason: 'Output is empty.' };
+  if (text.length < baseResume.length * 0.5) return { valid: false, reason: 'Output is less than half the length of the base resume — likely incomplete.' };
+  const anchors = ['@', 'linkedin', /experience/i, /education/i];
+  const matched = anchors.filter(a => new RegExp(a).test(text)).length;
+  if (matched < 2) return { valid: false, reason: 'Output is missing key resume sections (contact, experience, education).' };
+  return { valid: true };
+}
+
+function generateResumeFromEdits(btn) {
+  // Use the latest revised resume as base in round 2+, fall back to original
+  const baseResume = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
+  if (!baseResume) { alert('No base resume selected.'); return; }
 
   const blocks = document.querySelectorAll('#le-output .edit-block');
   const checkedEdits = [];
@@ -6868,70 +6962,46 @@ async function generateResumeFromEdits(btn) {
 
   if (checkedEdits.length === 0) { alert('Check at least one edit to apply, then click Generate.'); return; }
 
-  if (btn) btn.disabled = true;
-  document.getElementById('gr-loading').style.display = 'flex';
-  document.getElementById('gr-result').style.display = 'none';
-  const errEl = document.getElementById('gr-error');
-  if (errEl) { errEl.textContent = ''; errEl.classList.remove('visible'); }
+  // Record acceptance rate
+  recordEditDecision(checkedEdits.length, blocks.length);
 
-  const editsText = checkedEdits.map((e, i) => {
-    if (e.isInsert) return `INSERT ${i+1}: Add this new line/bullet:\n${e.after}`;
-    return `REPLACE ${i+1}:\nOriginal: ${e.before}\nNew version: ${e.after}`;
-  }).join('\n\n');
+  // Apply edits directly — no AI call
+  const result = applyEditsDirectly(baseResume, checkedEdits);
+  if (result.applied === 0) {
+    alert('No checked edits could be matched to the resume text. The BEFORE text in the edit cards may not exactly match the resume.');
+    return;
+  }
 
-  const systemPrompt = `You are a precise resume editor. Apply the listed edits to the resume exactly as specified.
-Rules:
-- Apply every REPLACE by substituting the original line with the new version
-- Apply every INSERT by adding the new content in the appropriate section
-- Preserve ALL other resume content exactly — every line, section, header, bullet, and spacing
-- Never add, remove, or change anything not in the edit list
-- ABSOLUTE BAN — never insert spaces between individual letters in any text node. Section headers must be unspaced words: "AREAS OF EXPERTISE" not "A R E A S O F E X P E R T I S E". Spaced characters break every ATS parser.
-- Output the complete updated resume text first
-- If you have editor's notes, questions, or flags for the candidate, append them after the resume separated by this exact line: ---EDITOR_NOTES---
-- Keep editor's notes concise and actionable — specific questions or flags only, no general commentary`;
+  // Validate output
+  const validation = validateResumeOutput(result.patched, baseResume);
+  if (!validation.valid) {
+    alert('Validation failed: ' + validation.reason + ' Please review the edits and try again.');
+    return;
+  }
 
-  const chatNotes = leHistory.filter(function(m){return m.role==='user';}).slice(2).map(function(m,i){return 'Note '+(i+1)+': '+m.content;}).join('\n');
-  const userMsg = `Here is the base resume:\n\n${baseResume}\n\n---\n\nApply these ${checkedEdits.length} edit(s):\n\n${editsText}${chatNotes ? '\n\n---\n\nADDITIONAL NOTES FROM CANDIDATE (incorporate into the resume where relevant):\n'+chatNotes : ''}\n\nReturn the complete updated resume.`;
+  // Store the base resume snapshot that edits were applied to
+  window._leBaseResumeText = baseResume;
+  // Store the generated resume
+  window._grResumeText = result.patched;
+  window._grResumeKey = selectedLeResume;
+  // Track chat note boundary — only notes after this point are new
+  window._leChatIndexAtLastResumeGenerate = leHistory.length;
 
-  try {
-    let text = '';
-    await callClaude(systemPrompt, userMsg, (t) => { text = t; });
+  // Populate page 07 textarea
+  const rcTa = document.getElementById('updated-resume-text');
+  if (rcTa) rcTa.value = result.patched;
 
-    // Split resume from editor's notes
-    const notesSplit = text.split(/---EDITOR_NOTES---/i);
-    let resumeText = notesSplit[0].trim();
-    const editorNotes = notesSplit[1] ? notesSplit[1].trim() : '';
+  // Render the full resume
+  document.getElementById('gr-output').innerHTML = renderResumePreview(result.patched);
+  document.getElementById('gr-result').style.display = 'block';
+  storeResumeVersion(result.patched, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
 
-    // Also strip any legacy editor notes pattern just in case
-    resumeText = resumeText.replace(/[-—]{2,}\s*EDITOR['']?S?\s*NOTES?[\s\S]*$/i, '').trim();
-
-    document.getElementById('gr-output').innerHTML = renderResumePreview(resumeText);
-    document.getElementById('gr-result').style.display = 'block';
-    window._grResumeText = resumeText;
-    window._grResumeKey = selectedLeResume;
-
-    // Route editor's notes to chat thread
-    if (editorNotes) {
-      const thread = document.getElementById('le-chat-thread');
-      if (thread) {
-        thread.insertAdjacentHTML('beforeend',
-          '<div style="margin-bottom:0.5rem;padding:0.5rem 0.75rem;border-left:3px solid var(--black);font-size:0.83rem;background:#fffdf7;border-radius:0 4px 4px 0;">' +
-          '<div style="font-family:\'Raleway\',sans-serif;font-size:0.58rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--mid);margin-bottom:0.25rem;">Claude — Editor\'s Notes</div>' +
-          '<div style="white-space:pre-wrap;line-height:1.5;">' + escHtml(editorNotes) + '</div>' +
-          '<div style="margin-top:0.5rem;font-size:0.7rem;color:var(--mid);font-family:\'Raleway\',sans-serif;">Reply here, then proceed to Revised Resume Check when ready.</div>' +
-          '</div>'
-        );
-        thread.scrollTop = thread.scrollHeight;
-        leHistory.push({ role: 'assistant', content: editorNotes });
-        // Update leSysPrompt to include notes context
-        leSysPrompt = leSysPrompt + '\n\nEDITOR\'S NOTES SENT TO CANDIDATE:\n' + editorNotes;
-      }
-    }
-  } catch(err) {
-    if (errEl) { errEl.textContent = 'Something went wrong: ' + err.message; errEl.classList.add('visible'); }
-  } finally {
-    document.getElementById('gr-loading').style.display = 'none';
-    if (btn) btn.disabled = false;
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = `\u2713 ${result.applied} edit${result.applied>1?'s':''} applied${result.skipped?' ('+result.skipped+' skipped)':''}`;
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
   }
 }
 
@@ -8125,14 +8195,7 @@ function recordEditDecision(checked, total) {
   localStorage.setItem('cara_edit_acceptance', JSON.stringify(history));
 }
 
-// Hook into generateResumeFromEdits to record acceptance rate
-const _origGenResume = generateResumeFromEdits;
-window.generateResumeFromEdits = async function(btn) {
-  const blocks = document.querySelectorAll('#le-output .edit-block');
-  const checked = Array.from(blocks).filter(b => b.querySelector('input[type="checkbox"]:checked')).length;
-  recordEditDecision(checked, blocks.length);
-  return _origGenResume(btn);
-};
+// generateResumeFromEdits records acceptance rate internally — no monkey-patch needed
 
 function getAcceptanceRate() {
   const history = JSON.parse(localStorage.getItem('cara_edit_acceptance') || '[]');

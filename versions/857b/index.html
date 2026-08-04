@@ -6995,14 +6995,313 @@ function renderResumePreview(text) {
   return html;
 }
 
+async function downloadGrAsDocx(btn) {
+  // Priority 1: Resume Editor iframe (07b) — preserves user edits
+  let html = null;
+  let label = null;
+  let pageCount = null;
+
+  const frame = document.getElementById('re-frame');
+  if (frame && frame.contentDocument && frame.contentDocument.documentElement && typeof _reCurrentLabel !== 'undefined' && _reCurrentLabel) {
+    html = '<!DOCTYPE html>\n' + frame.contentDocument.documentElement.outerHTML;
+    label = _reCurrentLabel;
+    pageCount = (typeof _reCurrentPageCount !== 'undefined' ? _reCurrentPageCount : null) || '3';
+  }
+
+  // Fallback: generate from resume text
+  if (!html) {
+    const text = window._grResumeText || document.getElementById('gr-output')?.textContent || '';
+    if (!text.trim()) { alert('Generate a resume first.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Building\u2026'; }
+
+    pageCount = document.querySelector('input[name="gr-pages"]:checked')?.value || '3';
+    label = (typeof RESUMES !== 'undefined' && RESUMES[window._grResumeKey || (typeof selectedLeResume !== 'undefined' ? selectedLeResume : null)]?.label) || 'Resume';
+
+    try {
+      html = await generateStyledResumeHTML(text, pageCount, label);
+    } catch(e) {
+      alert('Resume generation failed: ' + e.message);
+      if (btn) { btn.textContent = 'Download Word Doc'; btn.disabled = false; }
+      return;
+    }
+  } else {
+    if (btn) { btn.disabled = true; btn.textContent = 'Building\u2026'; }
+  }
+
+  // Load docx library from CDN
+  if (!window.docx) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+      s.onload = resolve; s.onerror = () => reject(new Error('Failed to load docx library'));
+      document.head.appendChild(s);
+    });
+  }
+
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+          BorderStyle, WidthType, AlignmentType } = window.docx;
+
+  // Constants — from CSS :root vars
+  const BLACK = '0D0D0B';
+  const MID   = '888680';
+  const INK   = '1E1E1C';
+  const ACCENT = '2A4080';
+  const RULE  = 'DDDAD3';
+  const FONT  = 'Helvetica Neue';
+
+  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  const allNoBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+  const tableNoBorders = { ...allNoBorders, insideH: noBorder, insideV: noBorder };
+
+  // Helper: parse inline content (handles <strong>, <b>, <span>, text)
+  function parseRuns(el, defaultSize, defaultColor) {
+    const runs = [];
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) {
+        if (node.textContent) {
+          runs.push(new TextRun({ text: node.textContent, size: defaultSize, font: FONT, color: defaultColor }));
+        }
+      } else if (node.tagName === 'STRONG' || node.tagName === 'B') {
+        runs.push(new TextRun({ text: node.textContent, bold: true, size: defaultSize, font: FONT, color: BLACK }));
+      } else if (node.tagName === 'SPAN') {
+        const fw = (node.style && node.style.fontWeight) || '';
+        const isLight = fw === '300';
+        const isBold = fw === '700' || fw === 'bold';
+        runs.push(new TextRun({ text: node.textContent, bold: isBold && !isLight, size: defaultSize, font: FONT, color: defaultColor }));
+      } else if (node.tagName === 'BR') {
+        runs.push(new TextRun({ break: 1 }));
+      } else if (node.textContent) {
+        runs.push(new TextRun({ text: node.textContent, size: defaultSize, font: FONT, color: defaultColor }));
+      }
+    }
+    return runs.length ? runs : [new TextRun({ text: el.textContent || '', size: defaultSize, font: FONT, color: defaultColor })];
+  }
+
+  function noBorderCell(children, width) {
+    return new TableCell({
+      width: { size: width, type: WidthType.DXA },
+      borders: allNoBorders,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      children: Array.isArray(children) ? children : [children]
+    });
+  }
+
+  function twoColTable(leftRuns, rightRuns, leftWidth, rightWidth, rightAlign) {
+    return new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [leftWidth, rightWidth],
+      borders: tableNoBorders,
+      rows: [new TableRow({
+        children: [
+          noBorderCell([new Paragraph({ children: leftRuns, spacing: { after: 0 } })], leftWidth),
+          noBorderCell([new Paragraph({ children: rightRuns, alignment: rightAlign ? AlignmentType.RIGHT : undefined, spacing: { after: 0 } })], rightWidth)
+        ]
+      })]
+    });
+  }
+
+  // Parse the styled HTML and build docx children
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(html, 'text/html');
+  const children = [];
+
+  let pages = parsed.querySelectorAll('.page');
+  if (pages.length === 0) pages = [parsed.body];
+
+  pages.forEach((page, pageIndex) => {
+    for (const el of page.children) {
+      if (!el.classList) continue;
+      if (el.classList.contains('resume-footer')) continue;
+
+      if (el.classList.contains('resume-name')) {
+        const runs = parseRuns(el, 50, BLACK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 20, line: 240 } }));
+      }
+      else if (el.classList.contains('resume-title')) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: el.textContent.toUpperCase(), bold: true, size: 14, font: FONT, color: ACCENT, allCaps: true })],
+          spacing: { after: 10, line: 240 }
+        }));
+      }
+      else if (el.classList.contains('resume-contact')) {
+        const runs = parseRuns(el, 15, MID);
+        children.push(new Paragraph({ children: runs, spacing: { after: 20, line: 240 } }));
+      }
+      else if (el.classList.contains('hbar')) {
+        children.push(new Paragraph({
+          children: [],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 16, color: ACCENT, space: 1 } },
+          spacing: { before: 40, after: 40 }
+        }));
+      }
+      else if (el.classList.contains('sec-label')) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: el.textContent.toUpperCase(), bold: true, size: 12, font: FONT, color: ACCENT, allCaps: true })],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: RULE, space: 2 } },
+          spacing: { before: 86, after: 50 }
+        }));
+      }
+      else if (el.classList.contains('synopsis')) {
+        const runs = parseRuns(el, 15, INK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 50, line: 360 } }));
+      }
+      else if (el.classList.contains('expertise-grid')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('exp-cat')) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: child.textContent.toUpperCase(), bold: true, size: 12, font: FONT, color: INK, allCaps: true })],
+              spacing: { before: 20, after: 10, line: 240 }
+            }));
+          } else if (child.classList && child.classList.contains('exp-detail')) {
+            const runs = parseRuns(child, 14, MID);
+            children.push(new Paragraph({ children: runs, spacing: { after: 10, line: 348 } }));
+          }
+        }
+      }
+      else if (el.classList.contains('job-block')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('job-header')) {
+            const orgEl = child.querySelector('.job-org');
+            const dateEl = child.querySelector('.job-date');
+            const orgRuns = orgEl ? [new TextRun({ text: orgEl.textContent.toUpperCase(), bold: true, size: 17, font: FONT, color: BLACK, allCaps: true })] : [];
+            const dateRuns = dateEl ? [new TextRun({ text: dateEl.textContent, size: 14, font: FONT, color: MID })] : [];
+            children.push(twoColTable(orgRuns, dateRuns, 7000, 2360, true));
+            children.push(new Paragraph({ children: [], spacing: { after: 20 } }));
+          }
+          else if (child.classList && child.classList.contains('job-title')) {
+            const runs = parseRuns(child, 16, ACCENT);
+            children.push(new Paragraph({
+              children: runs.map(r => { if (r.options) r.options.bold = true; return r; }),
+              spacing: { after: 40, line: 240 }
+            }));
+          }
+          else if (child.tagName === 'UL' || (child.classList && child.classList.contains('bullets'))) {
+            for (const li of child.querySelectorAll('li')) {
+              const runs = parseRuns(li, 15, INK);
+              const dashRun = new TextRun({ text: '\u2014  ', size: 15, font: FONT, color: ACCENT, bold: true });
+              children.push(new Paragraph({
+                children: [dashRun, ...runs],
+                spacing: { after: 20, line: 360 },
+                indent: { left: 216, hanging: 216 }
+              }));
+            }
+          }
+        }
+      }
+      else if (el.classList.contains('addl-item')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('addl-org')) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: child.textContent.toUpperCase(), bold: true, size: 16, font: FONT, color: BLACK, allCaps: true })],
+              spacing: { before: 30, after: 20, line: 240 }
+            }));
+          } else if (child.classList && child.classList.contains('addl-desc')) {
+            const runs = parseRuns(child, 14, INK);
+            children.push(new Paragraph({ children: runs, spacing: { after: 60, line: 348 } }));
+          }
+        }
+      }
+      else if (el.classList.contains('edu-row')) {
+        const degEl = el.querySelector('.edu-deg');
+        const schoolEl = el.querySelector('.edu-school');
+        const degRuns = degEl ? [new TextRun({ text: degEl.textContent, bold: true, size: 16, font: FONT, color: BLACK })] : [];
+        const schoolRuns = schoolEl ? [new TextRun({ text: schoolEl.textContent, size: 15, font: FONT, color: MID })] : [];
+        children.push(twoColTable(degRuns, schoolRuns, 4320, 5040, false));
+        children.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+      }
+      else if (el.classList.contains('certs')) {
+        const runs = parseRuns(el, 14, INK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 40, line: 372 } }));
+      }
+      else {
+        const text = el.textContent.trim();
+        if (text) {
+          const runs = parseRuns(el, 15, INK);
+          children.push(new Paragraph({ children: runs, spacing: { after: 40 } }));
+        }
+      }
+    }
+
+    // Footer
+    const footerEl = page.querySelector('.resume-footer');
+    if (footerEl) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: footerEl.textContent.trim(), size: 12, font: FONT, color: MID })],
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: RULE, space: 8 } },
+        spacing: { before: 200, after: 0, line: 240 }
+      }));
+    }
+
+    // Page break between pages
+    if (pageIndex < pages.length - 1) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: '', size: 1 })],
+        pageBreakBefore: true
+      }));
+    }
+  });
+
+  const safeLabel = label.replace(/[^a-zA-Z0-9]/g, '_');
+  const docxDoc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: { width: 12240, height: 15840 },
+          margin: { top: 720, right: 792, bottom: 432, left: 792 }
+        }
+      },
+      children
+    }]
+  });
+
+  try {
+    const blob = await Packer.toBlob(docxDoc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CaraBrown_${safeLabel}_${pageCount}pg.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    if (btn) { btn.textContent = 'Downloaded!'; setTimeout(() => { btn.textContent = 'Download Word Doc'; btn.disabled = false; }, 2000); }
+  } catch(e) {
+    alert('Download failed: ' + e.message);
+    if (btn) { btn.textContent = 'Download Word Doc'; btn.disabled = false; }
+  }
+}
+
+
 async function downloadRrcAsDocx(btn) {
+  // If Resume Editor iframe has content, export that directly
+  const frame = document.getElementById('re-frame');
+  if (frame && frame.contentDocument && frame.contentDocument.documentElement && typeof _reCurrentLabel !== 'undefined' && _reCurrentLabel) {
+    await downloadGrAsDocx(btn);
+    return;
+  }
+
+  // Otherwise use RRC text — mirror downloadRrcAsHTML sync logic
   const ta = document.getElementById('updated-resume-text');
   const text = (ta && ta.value.trim()) ? ta.value.trim() : window._grResumeText || '';
   if (!text) { alert('No resume text found. Paste your updated resume first.'); return; }
+
   const prev = window._grResumeText;
+  const prevKey = window._grResumeKey;
   window._grResumeText = text;
+
+  // Sync rrc-pages to gr-pages
+  const rrcPage = document.querySelector('input[name="rrc-pages"]:checked');
+  const grPage = document.querySelector('input[name="gr-pages"]:checked');
+  if (rrcPage && grPage) {
+    grPage.checked = false;
+    const target = rrcPage.value === '2'
+      ? document.querySelector('input[name="gr-pages"][value="2"]')
+      : document.querySelector('input[name="gr-pages"][value="3"]');
+    if (target) target.checked = true;
+  }
+
   await downloadGrAsDocx(btn);
+
   window._grResumeText = prev;
+  window._grResumeKey = prevKey;
 }
 
 async function downloadRrcAsHTML(btn) {

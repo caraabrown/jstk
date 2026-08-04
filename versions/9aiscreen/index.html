@@ -7232,14 +7232,313 @@ function renderResumePreview(text) {
   return html;
 }
 
+async function downloadGrAsDocx(btn) {
+  // Priority 1: Resume Editor iframe (07b) — preserves user edits
+  let html = null;
+  let label = null;
+  let pageCount = null;
+
+  const frame = document.getElementById('re-frame');
+  if (frame && frame.contentDocument && frame.contentDocument.documentElement && typeof _reCurrentLabel !== 'undefined' && _reCurrentLabel) {
+    html = '<!DOCTYPE html>\n' + frame.contentDocument.documentElement.outerHTML;
+    label = _reCurrentLabel;
+    pageCount = (typeof _reCurrentPageCount !== 'undefined' ? _reCurrentPageCount : null) || '3';
+  }
+
+  // Fallback: generate from resume text
+  if (!html) {
+    const text = window._grResumeText || document.getElementById('gr-output')?.textContent || '';
+    if (!text.trim()) { alert('Generate a resume first.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Building\u2026'; }
+
+    pageCount = document.querySelector('input[name="gr-pages"]:checked')?.value || '3';
+    label = (typeof RESUMES !== 'undefined' && RESUMES[window._grResumeKey || (typeof selectedLeResume !== 'undefined' ? selectedLeResume : null)]?.label) || 'Resume';
+
+    try {
+      html = await generateStyledResumeHTML(text, pageCount, label);
+    } catch(e) {
+      alert('Resume generation failed: ' + e.message);
+      if (btn) { btn.textContent = 'Download Word Doc'; btn.disabled = false; }
+      return;
+    }
+  } else {
+    if (btn) { btn.disabled = true; btn.textContent = 'Building\u2026'; }
+  }
+
+  // Load docx library from CDN
+  if (!window.docx) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+      s.onload = resolve; s.onerror = () => reject(new Error('Failed to load docx library'));
+      document.head.appendChild(s);
+    });
+  }
+
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+          BorderStyle, WidthType, AlignmentType } = window.docx;
+
+  // Constants — from CSS :root vars
+  const BLACK = '0D0D0B';
+  const MID   = '888680';
+  const INK   = '1E1E1C';
+  const ACCENT = '2A4080';
+  const RULE  = 'DDDAD3';
+  const FONT  = 'Helvetica Neue';
+
+  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  const allNoBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+  const tableNoBorders = { ...allNoBorders, insideH: noBorder, insideV: noBorder };
+
+  // Helper: parse inline content (handles <strong>, <b>, <span>, text)
+  function parseRuns(el, defaultSize, defaultColor) {
+    const runs = [];
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) {
+        if (node.textContent) {
+          runs.push(new TextRun({ text: node.textContent, size: defaultSize, font: FONT, color: defaultColor }));
+        }
+      } else if (node.tagName === 'STRONG' || node.tagName === 'B') {
+        runs.push(new TextRun({ text: node.textContent, bold: true, size: defaultSize, font: FONT, color: BLACK }));
+      } else if (node.tagName === 'SPAN') {
+        const fw = (node.style && node.style.fontWeight) || '';
+        const isLight = fw === '300';
+        const isBold = fw === '700' || fw === 'bold';
+        runs.push(new TextRun({ text: node.textContent, bold: isBold && !isLight, size: defaultSize, font: FONT, color: defaultColor }));
+      } else if (node.tagName === 'BR') {
+        runs.push(new TextRun({ break: 1 }));
+      } else if (node.textContent) {
+        runs.push(new TextRun({ text: node.textContent, size: defaultSize, font: FONT, color: defaultColor }));
+      }
+    }
+    return runs.length ? runs : [new TextRun({ text: el.textContent || '', size: defaultSize, font: FONT, color: defaultColor })];
+  }
+
+  function noBorderCell(children, width) {
+    return new TableCell({
+      width: { size: width, type: WidthType.DXA },
+      borders: allNoBorders,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      children: Array.isArray(children) ? children : [children]
+    });
+  }
+
+  function twoColTable(leftRuns, rightRuns, leftWidth, rightWidth, rightAlign) {
+    return new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: [leftWidth, rightWidth],
+      borders: tableNoBorders,
+      rows: [new TableRow({
+        children: [
+          noBorderCell([new Paragraph({ children: leftRuns, spacing: { after: 0 } })], leftWidth),
+          noBorderCell([new Paragraph({ children: rightRuns, alignment: rightAlign ? AlignmentType.RIGHT : undefined, spacing: { after: 0 } })], rightWidth)
+        ]
+      })]
+    });
+  }
+
+  // Parse the styled HTML and build docx children
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(html, 'text/html');
+  const children = [];
+
+  let pages = parsed.querySelectorAll('.page');
+  if (pages.length === 0) pages = [parsed.body];
+
+  pages.forEach((page, pageIndex) => {
+    for (const el of page.children) {
+      if (!el.classList) continue;
+      if (el.classList.contains('resume-footer')) continue;
+
+      if (el.classList.contains('resume-name')) {
+        const runs = parseRuns(el, 50, BLACK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 20, line: 240 } }));
+      }
+      else if (el.classList.contains('resume-title')) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: el.textContent.toUpperCase(), bold: true, size: 14, font: FONT, color: ACCENT, allCaps: true })],
+          spacing: { after: 10, line: 240 }
+        }));
+      }
+      else if (el.classList.contains('resume-contact')) {
+        const runs = parseRuns(el, 15, MID);
+        children.push(new Paragraph({ children: runs, spacing: { after: 20, line: 240 } }));
+      }
+      else if (el.classList.contains('hbar')) {
+        children.push(new Paragraph({
+          children: [],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 16, color: ACCENT, space: 1 } },
+          spacing: { before: 40, after: 40 }
+        }));
+      }
+      else if (el.classList.contains('sec-label')) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: el.textContent.toUpperCase(), bold: true, size: 12, font: FONT, color: ACCENT, allCaps: true })],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: RULE, space: 2 } },
+          spacing: { before: 86, after: 50 }
+        }));
+      }
+      else if (el.classList.contains('synopsis')) {
+        const runs = parseRuns(el, 15, INK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 50, line: 360 } }));
+      }
+      else if (el.classList.contains('expertise-grid')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('exp-cat')) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: child.textContent.toUpperCase(), bold: true, size: 12, font: FONT, color: INK, allCaps: true })],
+              spacing: { before: 20, after: 10, line: 240 }
+            }));
+          } else if (child.classList && child.classList.contains('exp-detail')) {
+            const runs = parseRuns(child, 14, MID);
+            children.push(new Paragraph({ children: runs, spacing: { after: 10, line: 348 } }));
+          }
+        }
+      }
+      else if (el.classList.contains('job-block')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('job-header')) {
+            const orgEl = child.querySelector('.job-org');
+            const dateEl = child.querySelector('.job-date');
+            const orgRuns = orgEl ? [new TextRun({ text: orgEl.textContent.toUpperCase(), bold: true, size: 17, font: FONT, color: BLACK, allCaps: true })] : [];
+            const dateRuns = dateEl ? [new TextRun({ text: dateEl.textContent, size: 14, font: FONT, color: MID })] : [];
+            children.push(twoColTable(orgRuns, dateRuns, 7000, 2360, true));
+            children.push(new Paragraph({ children: [], spacing: { after: 20 } }));
+          }
+          else if (child.classList && child.classList.contains('job-title')) {
+            const runs = parseRuns(child, 16, ACCENT);
+            children.push(new Paragraph({
+              children: runs.map(r => { if (r.options) r.options.bold = true; return r; }),
+              spacing: { after: 40, line: 240 }
+            }));
+          }
+          else if (child.tagName === 'UL' || (child.classList && child.classList.contains('bullets'))) {
+            for (const li of child.querySelectorAll('li')) {
+              const runs = parseRuns(li, 15, INK);
+              const dashRun = new TextRun({ text: '\u2014  ', size: 15, font: FONT, color: ACCENT, bold: true });
+              children.push(new Paragraph({
+                children: [dashRun, ...runs],
+                spacing: { after: 20, line: 360 },
+                indent: { left: 216, hanging: 216 }
+              }));
+            }
+          }
+        }
+      }
+      else if (el.classList.contains('addl-item')) {
+        for (const child of el.children) {
+          if (child.classList && child.classList.contains('addl-org')) {
+            children.push(new Paragraph({
+              children: [new TextRun({ text: child.textContent.toUpperCase(), bold: true, size: 16, font: FONT, color: BLACK, allCaps: true })],
+              spacing: { before: 30, after: 20, line: 240 }
+            }));
+          } else if (child.classList && child.classList.contains('addl-desc')) {
+            const runs = parseRuns(child, 14, INK);
+            children.push(new Paragraph({ children: runs, spacing: { after: 60, line: 348 } }));
+          }
+        }
+      }
+      else if (el.classList.contains('edu-row')) {
+        const degEl = el.querySelector('.edu-deg');
+        const schoolEl = el.querySelector('.edu-school');
+        const degRuns = degEl ? [new TextRun({ text: degEl.textContent, bold: true, size: 16, font: FONT, color: BLACK })] : [];
+        const schoolRuns = schoolEl ? [new TextRun({ text: schoolEl.textContent, size: 15, font: FONT, color: MID })] : [];
+        children.push(twoColTable(degRuns, schoolRuns, 4320, 5040, false));
+        children.push(new Paragraph({ children: [], spacing: { after: 80 } }));
+      }
+      else if (el.classList.contains('certs')) {
+        const runs = parseRuns(el, 14, INK);
+        children.push(new Paragraph({ children: runs, spacing: { after: 40, line: 372 } }));
+      }
+      else {
+        const text = el.textContent.trim();
+        if (text) {
+          const runs = parseRuns(el, 15, INK);
+          children.push(new Paragraph({ children: runs, spacing: { after: 40 } }));
+        }
+      }
+    }
+
+    // Footer
+    const footerEl = page.querySelector('.resume-footer');
+    if (footerEl) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: footerEl.textContent.trim(), size: 12, font: FONT, color: MID })],
+        border: { top: { style: BorderStyle.SINGLE, size: 4, color: RULE, space: 8 } },
+        spacing: { before: 200, after: 0, line: 240 }
+      }));
+    }
+
+    // Page break between pages
+    if (pageIndex < pages.length - 1) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: '', size: 1 })],
+        pageBreakBefore: true
+      }));
+    }
+  });
+
+  const safeLabel = label.replace(/[^a-zA-Z0-9]/g, '_');
+  const docxDoc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: { width: 12240, height: 15840 },
+          margin: { top: 720, right: 792, bottom: 432, left: 792 }
+        }
+      },
+      children
+    }]
+  });
+
+  try {
+    const blob = await Packer.toBlob(docxDoc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CaraBrown_${safeLabel}_${pageCount}pg.docx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    if (btn) { btn.textContent = 'Downloaded!'; setTimeout(() => { btn.textContent = 'Download Word Doc'; btn.disabled = false; }, 2000); }
+  } catch(e) {
+    alert('Download failed: ' + e.message);
+    if (btn) { btn.textContent = 'Download Word Doc'; btn.disabled = false; }
+  }
+}
+
+
 async function downloadRrcAsDocx(btn) {
+  // If Resume Editor iframe has content, export that directly
+  const frame = document.getElementById('re-frame');
+  if (frame && frame.contentDocument && frame.contentDocument.documentElement && typeof _reCurrentLabel !== 'undefined' && _reCurrentLabel) {
+    await downloadGrAsDocx(btn);
+    return;
+  }
+
+  // Otherwise use RRC text — mirror downloadRrcAsHTML sync logic
   const ta = document.getElementById('updated-resume-text');
   const text = (ta && ta.value.trim()) ? ta.value.trim() : window._grResumeText || '';
   if (!text) { alert('No resume text found. Paste your updated resume first.'); return; }
+
   const prev = window._grResumeText;
+  const prevKey = window._grResumeKey;
   window._grResumeText = text;
+
+  // Sync rrc-pages to gr-pages
+  const rrcPage = document.querySelector('input[name="rrc-pages"]:checked');
+  const grPage = document.querySelector('input[name="gr-pages"]:checked');
+  if (rrcPage && grPage) {
+    grPage.checked = false;
+    const target = rrcPage.value === '2'
+      ? document.querySelector('input[name="gr-pages"][value="2"]')
+      : document.querySelector('input[name="gr-pages"][value="3"]');
+    if (target) target.checked = true;
+  }
+
   await downloadGrAsDocx(btn);
+
   window._grResumeText = prev;
+  window._grResumeKey = prevKey;
 }
 
 async function downloadRrcAsHTML(btn) {
@@ -7263,6 +7562,108 @@ function copyGrOutput(btn) {
   navigator.clipboard.writeText(text).then(() => {
     if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy Text', 2000); }
   });
+}
+
+async function generateStyledResumeHTML(text, pageCount, label) {
+  // CSS varies by page count per style guide v2
+  const is2page = pageCount === '2';
+  const pagePadding = is2page ? '0.28in 0.6in' : '0.32in 0.55in 0.18in 0.55in';
+  const hbarMargin = is2page ? '0.11in 0' : '0.04in 0';
+
+  const CSS = `:root{--black:#0d0d0b;--white:#ffffff;--mid:#888680;--rule:#dddad3;--ink:#1e1e1c;--navy:#1a2744;--accent:#2a4080;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Helvetica Neue',Arial,sans-serif;background:#7a7975;-webkit-font-smoothing:antialiased;color:var(--ink);}
+.print-bar{position:fixed;top:0;left:0;right:0;z-index:999;background:var(--navy);padding:10px 36px;display:flex;align-items:center;justify-content:space-between;}
+.print-bar p{font-size:12px;color:rgba(246,245,241,.6);font-weight:300;}
+.print-bar p strong{color:#f6f5f1;font-weight:600;}
+.btn-print{background:#f6f5f1;color:var(--black);font-family:'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:8px 22px;border:none;cursor:pointer;}
+.doc{padding:56px 0 48px;display:flex;flex-direction:column;align-items:center;gap:0;}
+.page{width:8.5in;height:11in;background:#ffffff;margin:24px auto;padding:${pagePadding};box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;display:flex;flex-direction:column;}
+.resume-name{font-size:25pt;font-weight:700;letter-spacing:-0.02em;color:#0d0d0b;line-height:1;margin-bottom:1px;}
+.resume-name span{font-weight:300;}
+.resume-title{font-size:7pt;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:#2a4080;margin-top:3px;line-height:1.3;}
+.resume-contact{font-size:7.5pt;font-weight:300;letter-spacing:0.03em;color:#888680;margin-top:2px;}
+.hbar{height:2px;background:#2a4080;margin:${hbarMargin};}
+.sec-label{font-size:6pt;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#2a4080;border-bottom:1px solid #dddad3;padding-bottom:0.02in;margin-top:0.06in;margin-bottom:0.05in;}
+.synopsis{font-size:7.5pt;font-weight:400;line-height:1.5;color:#1e1e1c;margin-bottom:0.05in;}
+.synopsis strong{font-weight:600;color:#0d0d0b;}
+.expertise-grid{display:block;margin-bottom:0.06in;}
+.exp-cat{font-size:6pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#1e1e1c;margin-top:0.02in;}
+.exp-detail{font-size:7pt;font-weight:300;line-height:1.45;color:#888680;}
+.job-block{margin-bottom:0.07in;}
+.job-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.02in;}
+.job-org{font-size:8.5pt;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#0d0d0b;}
+.job-date{font-size:7pt;font-weight:300;letter-spacing:0.04em;color:#888680;white-space:nowrap;}
+.job-title{font-size:8pt;font-weight:600;color:#2a4080;margin-bottom:0.05in;}
+.bullets{list-style:none;margin:0;padding:0;}
+.bullets li{font-size:7.5pt;font-weight:400;color:#1e1e1c;line-height:1.5;margin-bottom:0.02in;padding-left:0.15in;position:relative;}
+.bullets li::before{content:'—';position:absolute;left:0;color:#2a4080;font-weight:600;}
+.bullets strong{font-weight:600;color:#0d0d0b;}
+.addl-item{margin-bottom:0.1in;}
+.addl-org{font-size:8pt;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#0d0d0b;}
+.addl-desc{font-size:7pt;font-weight:300;line-height:1.48;color:#1e1e1c;}
+.edu-row{display:flex;align-items:baseline;margin-bottom:0.08in;gap:0;}
+.edu-deg{font-size:8pt;font-weight:600;color:#0d0d0b;flex:0 0 3in;}
+.edu-school{font-size:7.5pt;font-weight:300;color:#888680;flex:1;}
+.certs{font-size:7pt;font-weight:300;line-height:1.55;color:#1e1e1c;}
+.resume-footer{margin-top:auto;padding-top:0.08in;border-top:1px solid #dddad3;display:flex;justify-content:space-between;font-size:6pt;font-weight:300;letter-spacing:0.05em;color:#888680;}
+@media print{@page{size:letter;margin:0;}body{background:#ffffff;}.print-bar{display:none!important;}.doc{padding:0;gap:0;}.page{box-shadow:none;margin:0;height:11in;page-break-after:always;}.page:last-child{page-break-after:avoid;}}`;
+
+  const STRUCTURE = `HTML class reference:
+- .page — fixed 8.5×11in page (height:11in, overflow:hidden). Use exactly ${pageCount} pages total. Content that does not fit on one page MUST flow to the next .page div — never overflows a single page. Every .page uses display:flex; flex-direction:column.
+- .resume-name — Name heading; wrap "MBA" in <span> at font-weight:300
+- .resume-title — Role title. MAX 3 items separated by · . Must fit on 1 line. Items are role titles/functions ONLY — not skills or keywords. Reduce font-size or letter-spacing if it wraps.
+- .resume-contact — Contact line: phone · email · linkedin · caraabrown.com (portfolio)
+- .hbar — 2px accent bar. PAGE 1 ONLY. Never appears on pages 2 or 3.
+- .sec-label — Section heading (SYNOPSIS, AREAS OF EXPERTISE, PROFESSIONAL EXPERIENCE, ADDITIONAL EXPERIENCE, EDUCATION)
+- .synopsis — EXACTLY 1 paragraph, 100–150 words. Bold 2–3 key skill clusters with <strong>. line-height:1.5.
+- .expertise-grid — display:block (SINGLE COLUMN — no CSS grid, no 2-col layout)
+  - .exp-cat — Category label
+  - .exp-detail — Dot-separated skill list (use · middot)
+- Tools row: .exp-detail only — dot-separated list, no sentences, no descriptions
+- .job-block — One work entry. Split bullets across pages when needed; repeat .job-header with "(continued)" appended.
+  - .job-header > .job-org + .job-date
+  - .job-title — Role title in accent color
+  - ul.bullets > li — Every bullet 2 printed lines or less. Leads with action or outcome. Bold metrics with <strong>. Use class="bullets".
+- .addl-item — Additional experience. GardaWorld: no dates.
+  - .addl-org / .addl-desc
+- .edu-row > .edu-deg (flex:0 0 3in) + .edu-school — NO graduation years
+- .certs — Certs / affiliations
+- .resume-footer — "Cara A. Brown, MBA" · "Page X of ${pageCount}" · "caraabrown.com" — MANDATORY on every page, last child of every .page`;
+
+  const pageInstructions = is2page
+    ? `TARGET: exactly 2 pages. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued · Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Be concise — 1–2 most impactful bullets per role if needed to fit.`
+    : `TARGET: exactly 3 pages. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued (flows until full) · Footer. Page 3: Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Include all bullets for major roles. Never leave a page mostly empty.`;
+
+  const sysPrompt = `You are a precise resume HTML formatter. Convert the plain-text resume into a complete, print-ready HTML file using the provided CSS and class structure. Source of truth: Cara A. Brown Resume Style Guide v2.
+Rules:
+- ${pageInstructions}
+- Use ONLY the defined CSS classes — no inline styles except where the original had them
+- Bold all metrics and quantified outcomes using <strong>
+- Each .page is exactly 8.5×11in with overflow:hidden — content MUST NOT exceed one page div. Split roles across pages as needed; repeat .job-header with "(continued)". NEVER truncate or omit content.
+- Page padding is already set in CSS — do NOT add inline padding or margin on any .page div
+- Output ONLY the complete HTML document starting with <!DOCTYPE html> — no markdown, no explanation
+- SYNOPSIS: EXACTLY 1 paragraph. 100–150 words. Tone: direct, factual, credential-forward — NOT narrative, NOT storytelling. No numeric year counts — never "X years" or "X+ years" — use "proven" instead. BANNED: "The work is rarely what it appears" / "what looks like a technology gap is usually a diagnostic failure" / "I start there" / any rhetorical "what looks like X is really Y" construction. End with: MBA, Design Strategy — California College of the Arts, ranked #2 graduate design program globally.
+- TITLE LINE: max 3 items · separated by · · role titles/functions ONLY (no skills/keywords) · must fit on 1 line · reduce font-size or letter-spacing if it wraps
+- AREAS OF EXPERTISE: display:block single column ONLY — never CSS grid, never 2-column
+- TOOLS: dot-separated list only (Figma · Miro · FigJam) — no sentences, no descriptions
+- BULLETS: em-dash via CSS ::before ONLY. Never •, ▪, →. Every bullet 2 printed lines or less — split longer bullets into two. Each bullet leads with action or outcome, not context.
+- HBAR: page 1 only — never on pages 2 or 3
+- FOOTER IS MANDATORY on every single .page div — last child element, no exceptions
+- ABSOLUTE BAN — never insert spaces between individual letters. "A R E A S O F E X P E R T I S E" is forbidden. Section label text must be unspaced words: "AREAS OF EXPERTISE" not "A R E A S O F E X P E R T I S E"
+- Every .page MUST have display:flex; flex-direction:column — required for footer to pin to bottom
+- Content flows naturally page to page — BANNED: locking any content to a specific page, leaving a page mostly empty, overflowing any page
+- Alanne International: in Professional Experience, dated 01/2026–Present
+- GardaWorld: in Additional Experience, no dates
+- No graduation years in Education
+- Characters NEVER allowed in body text: → (use "to"), typed — as bullet character (CSS only), #CloseTheGap (use CloseTheGap)
+${STRUCTURE}`;
+
+  try {
+    let html = '';
+    await callClaude(sysPrompt, `Role label: ${label}\n\nCSS to embed in <style> tag:\n${CSS}\n\n---\n\nPlain-text resume to format:\n${text}\n\nProduce the complete HTML file.`, (t) => { html = t; });
+    html = html.replace(/^```html\n?|^```\n?|```$/gm, '').trim();
+  return html;
 }
 
 async function downloadGrAsHTML(btn) {
@@ -7370,9 +7771,7 @@ Rules:
 ${STRUCTURE}`;
 
   try {
-    let html = '';
-    await callClaude(sysPrompt, `Role label: ${label}\n\nCSS to embed in <style> tag:\n${CSS}\n\n---\n\nPlain-text resume to format:\n${text}\n\nProduce the complete HTML file.`, (t) => { html = t; });
-    html = html.replace(/^```html\n?|^```\n?|```$/gm, '').trim();
+      const html = await generateStyledResumeHTML(text, pageCount, label);
 
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);

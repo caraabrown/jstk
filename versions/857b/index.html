@@ -994,6 +994,89 @@
   .ats-bullet::before { content: "\2022"; margin-right: 0.4rem; color: var(--mid); }
   .ats-paragraph { padding: 0.3rem 0; color: var(--black); font-size: 0.85rem; line-height: 1.7; }
 
+  /* ─── SCREENER ASSESSMENT (Step 02) ─── */
+  #panel-screener-assessment { font-family: 'Open Sans', sans-serif; }
+  .sa-status-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bgoff); border:1px solid var(--border); border-radius:4px; padding:0.7rem 1rem; margin-bottom:1.2rem; font-family:'Raleway',sans-serif; font-size:0.72rem; color:var(--mid); flex-wrap:wrap; }
+  .sa-status-bar #sa-rerun-btn { flex-shrink:0; }
+
+  .sa-filter-panel { background:var(--bg); border:1px solid var(--border); border-radius:6px; overflow:hidden; margin-bottom:1.2rem; }
+  .sa-filter-panel-top { display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid var(--border); background:var(--bgoff); }
+  .sa-filter-panel-title { font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--mid); }
+  .sa-fp-action { font-family:'Open Sans',sans-serif; font-size:11px; color:var(--black); cursor:pointer; background:none; border:none; padding:0; font-weight:600; text-decoration:underline; }
+  .sa-filter-dims { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--border); }
+  .sa-filter-dim { padding:10px 14px; border-right:1px solid var(--border); }
+  .sa-filter-dim:last-child { border-right:none; }
+  .sa-filter-dim-label { font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--mid); margin-bottom:7px; }
+  .sa-filter-opts { display:flex; flex-direction:column; gap:3px; }
+  .sa-filter-opt { display:flex; align-items:center; gap:7px; cursor:pointer; padding:3px 0; }
+  .sa-filter-opt input[type=checkbox] { width:12px; height:12px; accent-color:var(--black); cursor:pointer; flex-shrink:0; }
+  .sa-filter-opt-text { font-size:11px; color:var(--black); line-height:1.3; }
+  .sa-filter-opt-sub { font-size:9px; color:var(--mid); display:block; line-height:1.3; }
+  .sa-filter-results-hdr { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--border); }
+  .sa-filter-results-group { padding:8px 14px; border-right:1px solid var(--border); }
+  .sa-filter-results-group:last-child { border-right:none; }
+  .sa-frg-label { font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mid); margin-bottom:6px; }
+  .sa-screener-rows { display:flex; flex-direction:column; gap:2px; }
+  .sa-screener-row { display:flex; align-items:flex-start; gap:8px; padding:5px 8px; border-radius:4px; transition:background .1s; }
+  .sa-screener-row.sa-sr-active { background:var(--bgoff); }
+  .sa-screener-row.sa-sr-inactive { opacity:.4; }
+  .sa-sr-toggle { flex-shrink:0; width:28px; height:16px; border-radius:8px; background:var(--border); position:relative; cursor:pointer; margin-top:2px; transition:background .2s; border:none; padding:0; }
+  .sa-screener-row.sa-sr-active .sa-sr-toggle { background:var(--black); }
+  .sa-sr-toggle::after { content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--bg); transition:transform .2s; }
+  .sa-screener-row.sa-sr-active .sa-sr-toggle::after { transform:translateX(12px); }
+  .sa-sr-name { font-size:11px; font-weight:600; color:var(--black); line-height:1.3; }
+  .sa-sr-desc { font-size:10px; color:var(--mid); line-height:1.4; margin-top:1px; }
+  .sa-filter-summary { display:flex; align-items:center; padding:8px 14px; background:var(--bgoff); border-top:1px solid var(--border); }
+  .sa-fs-text { font-family:'Raleway',sans-serif; font-size:11px; color:var(--mid); }
+  .sa-fs-text strong { color:var(--black); font-weight:700; }
+
+  .sa-legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:1rem; align-items:center; }
+  .sa-legend-item { display:flex; align-items:center; gap:6px; font-family:'Raleway',sans-serif; font-size:10.5px; color:var(--mid); }
+  .sa-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; display:inline-block; background:var(--border); }
+  .sa-d-pass { background:#1DB87A; } .sa-d-risk { background:#D4872A; } .sa-d-fail { background:#D44B4B; }
+
+  .sa-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:6px; background:var(--bg); margin-bottom:1.5rem; }
+  .sa-table { width:100%; border-collapse:collapse; min-width:920px; }
+  .sa-col-resume { width:180px; }
+  .sa-table thead th:first-child, .sa-table td:first-child { position:sticky; left:0; z-index:1; background:var(--bgoff); }
+  .sa-table thead th:first-child { z-index:3; }
+  .sa-table thead th { font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--black); padding:9px 12px; border-bottom:1px solid var(--border); text-align:left; background:var(--bgoff); white-space:nowrap; position:sticky; top:0; z-index:2; }
+  .sa-table thead tr.sa-group-hdr th { font-size:8px; letter-spacing:.16em; color:var(--mid); background:#f0efec; padding:4px 12px; border-bottom:.5px solid var(--border); position:static; }
+  .sa-table thead tr.sa-group-hdr th:first-child { position:sticky; left:0; z-index:3; background:#f0efec; }
+  .sa-table tr.sa-sec-hdr td { background:var(--bgoff); font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--black); padding:7px 12px; border-top:1px solid var(--border); border-bottom:.5px solid var(--border); }
+  .sa-table tbody tr:not(.sa-sec-hdr) { border-bottom:.5px solid var(--border); }
+  .sa-table tbody tr:not(.sa-sec-hdr):hover td { background:var(--bgoff); }
+  .sa-table td { padding:10px 12px; vertical-align:top; }
+  .sa-row-title { font-size:12px; font-weight:600; color:var(--black); display:flex; align-items:center; gap:0; }
+  .sa-row-sub { font-size:10px; color:var(--mid); margin-top:2px; }
+  .sa-cell { display:flex; flex-direction:column; gap:4px; }
+  .sa-verdict { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .sa-verdict-word.sa-pass { color:#1e6b35; } .sa-verdict-word.sa-risk { color:#7a5000; } .sa-verdict-word.sa-fail { color:#8b2020; }
+  .sa-note { font-size:10px; color:var(--mid); line-height:1.4; margin-top:2px; }
+  .sa-screener-col.sa-hidden { display:none; }
+  .sa-data-row.sa-collapsed td .sa-note { display:none; }
+  .sa-collapse-btn { background:none; border:none; cursor:pointer; font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mid); padding:0; margin-left:8px; }
+  .sa-collapse-btn:hover { color:var(--black); }
+
+  .sa-checklist-wrap { margin-top:1.5rem; padding-top:1.5rem; border-top:2px solid var(--black); }
+  .sa-cl-title-row { margin-bottom:.4rem; }
+  .sa-cl-title { font-family:'Raleway',sans-serif; font-size:15px; font-weight:700; letter-spacing:-.01em; color:var(--black); }
+  .sa-cl-sub { font-size:11px; color:var(--mid); line-height:1.6; max-width:700px; margin-bottom:1.3rem; }
+  .sa-cl-section { margin-bottom:1.5rem; }
+  .sa-cl-section-title { font-family:'Raleway',sans-serif; font-size:9px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--black); margin-bottom:.6rem; padding-bottom:.4rem; border-bottom:1px solid var(--border); }
+  .sa-cl-list { list-style:none; display:flex; flex-direction:column; gap:8px; padding:0; margin:0; }
+  .sa-cl-item { font-size:11px; color:var(--mid); line-height:1.55; display:flex; align-items:flex-start; gap:9px; }
+  .sa-cl-item input[type=checkbox] { flex-shrink:0; margin-top:2px; width:13px; height:13px; accent-color:var(--black); cursor:pointer; }
+  .sa-cl-item label { cursor:pointer; }
+  .sa-cl-item input:checked + label { text-decoration:line-through; opacity:.4; }
+  .sa-badge { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.03em; padding:1px 7px; border-radius:10px; margin-right:5px; vertical-align:middle; }
+  .sa-b-pri { background:#fdf0f0; color:#8b2020; border:.5px solid #e8b0b0; }
+  .sa-b-jd { background:#fef4e4; color:#7a5000; border:.5px solid #f0cc88; }
+  .sa-b-res { background:#eeeafa; color:#3a2880; border:.5px solid #bbb4e8; }
+  .sa-b-ok { background:#e8f5ec; color:#1e6b35; border:.5px solid #b6d9a0; }
+
+  .sa-footer { margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border); font-size:9.5px; color:var(--mid); letter-spacing:.03em; font-family:'Raleway',sans-serif; }
+
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -1130,6 +1213,7 @@
       <li><a href="#" data-panel="dashboard" class="active"><span class="num">◈</span> Dashboard</a></li>
       <li><a href="#" data-panel="job-tracker"><span class="num">00</span> Job Tracker</a></li>
       <li><a href="#" data-panel="my-resumes"><span class="num">01</span> My Resumes</a></li>
+      <li><a href="#" data-panel="screener-assessment"><span class="num">01b</span> AI Screener Assessment<span class="nav-dot"></span></a></li>
     </ul>
     <div class="nav-section">Intelligence</div>
     <ul>
@@ -1397,6 +1481,162 @@
       </div>
 
     </div>
+
+    <!-- ── PANEL 01b: AI SCREENER ASSESSMENT ── -->
+    <div class="panel" id="panel-screener-assessment">
+      <div class="panel-title">AI Screener <em>Assessment</em></div>
+      <div class="panel-desc">See how each of your saved resumes is likely to score across 9 real-world ATS and AI hiring platforms. This re-analyzes automatically whenever a resume changes in Step 01 — no button required.</div>
+
+      <div class="sa-status-bar">
+        <span id="sa-status-text">Not yet analyzed — opening this page will run it automatically.</span>
+        <button class="slot-btn" id="sa-rerun-btn" onclick="runScreenerAssessment(true)" style="display:none;">&#8635; Re-run now</button>
+      </div>
+
+      <div class="loading" id="sa-loading"><div class="spinner"></div>Analyzing your resumes against 9 screening platforms…</div>
+      <div class="error-msg" id="sa-error"></div>
+
+      <!-- FILTER PANEL -->
+      <div class="sa-filter-panel">
+        <div class="sa-filter-panel-top">
+          <span class="sa-filter-panel-title">Describe the job — see which screeners apply</span>
+          <div class="sa-filter-panel-actions">
+            <button class="sa-fp-action" onclick="saResetFilters()">Reset</button>
+          </div>
+        </div>
+        <div class="sa-filter-dims">
+          <div class="sa-filter-dim">
+            <div class="sa-filter-dim-label">Company size</div>
+            <div class="sa-filter-opts">
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-size" value="enterprise" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Large Enterprise<span class="sa-filter-opt-sub">10,000+ employees</span></span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-size" value="midmarket" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Mid-Market<span class="sa-filter-opt-sub">100–5,000 employees</span></span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-size" value="small" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Small / Startup<span class="sa-filter-opt-sub">Under 100 employees</span></span></label>
+            </div>
+          </div>
+          <div class="sa-filter-dim">
+            <div class="sa-filter-dim-label">Industry</div>
+            <div class="sa-filter-opts">
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="tech" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Tech / SaaS</span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="retail" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Retail / CPG / Logistics</span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="finance" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Finance / Banking</span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="health" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Healthcare</span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="nonprofit" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Nonprofit / Gov / Civic</span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-industry" value="consulting" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Consulting / Agency</span></label>
+            </div>
+          </div>
+          <div class="sa-filter-dim">
+            <div class="sa-filter-dim-label">Seniority level</div>
+            <div class="sa-filter-opts">
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-seniority" value="exec" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Executive / VP<span class="sa-filter-opt-sub">VP, SVP, C-suite</span></span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-seniority" value="director" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Director / Principal<span class="sa-filter-opt-sub">Director, Head of, Principal</span></span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-seniority" value="senior" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Senior / Manager<span class="sa-filter-opt-sub">Senior IC, Team Lead, Manager</span></span></label>
+              <label class="sa-filter-opt"><input type="checkbox" class="sa-filter-cb" name="sa-seniority" value="early" onchange="saApplyFilters()"><span class="sa-filter-opt-text">Early Career<span class="sa-filter-opt-sub">Associate, Coordinator, IC</span></span></label>
+            </div>
+          </div>
+        </div>
+        <div class="sa-filter-results">
+          <div class="sa-filter-results-hdr">
+            <div class="sa-filter-results-group">
+              <div class="sa-frg-label">Enterprise ATS</div>
+              <div class="sa-screener-rows">
+                <div class="sa-screener-row sa-sr-active" data-screener="workday">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('workday')" aria-label="Toggle Workday"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Workday / HiredScore</div><div class="sa-sr-desc">Ranks by title trajectory + historical outcome signals. Sub-scores career path consistency.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="successfactors">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('successfactors')" aria-label="Toggle SuccessFactors"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">SuccessFactors / Joule</div><div class="sa-sr-desc">Extracts skills via Joule and matches to Talent Intelligence Hub. Skills-first, not title-first.</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="sa-filter-results-group">
+              <div class="sa-frg-label">Mid-Market / Tech</div>
+              <div class="sa-screener-rows">
+                <div class="sa-screener-row sa-sr-active" data-screener="greenhouse">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('greenhouse')" aria-label="Toggle Greenhouse"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Greenhouse AI</div><div class="sa-sr-desc">Candidate summary from parsed text + structured scorecard. No auto-reject.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="lever">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('lever')" aria-label="Toggle Lever"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Lever</div><div class="sa-sr-desc">JD-semantic ranking via Gem AI + pipeline history. Recruiter keyword search drives shortlisting.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="ashby">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('ashby')" aria-label="Toggle Ashby"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Ashby</div><div class="sa-sr-desc">Returns Meets / Does Not Meet per recruiter-defined criteria. No numeric rank, no auto-reject.</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="sa-filter-results-group">
+              <div class="sa-frg-label">Layered / Specialty</div>
+              <div class="sa-screener-rows">
+                <div class="sa-screener-row sa-sr-active" data-screener="eightfold">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('eightfold')" aria-label="Toggle Eightfold"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Eightfold</div><div class="sa-sr-desc">Deep-skills inference + career trajectory model. Best at nonlinear profiles. Penalizes title/function mismatch.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="phenom">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('phenom')" aria-label="Toggle Phenom"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Phenom</div><div class="sa-sr-desc">Dynamic Fit Score weighted by keyword parity. Pre-apply chat can gate candidates before submission.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="hirevue">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('hirevue')" aria-label="Toggle HireVue"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">HireVue</div><div class="sa-sr-desc">BARS behavioral rubric scores async video transcripts. Quantified evidence scores highest.</div></div>
+                </div>
+                <div class="sa-screener-row sa-sr-active" data-screener="olivia">
+                  <button class="sa-sr-toggle" onclick="saManualToggle('olivia')" aria-label="Toggle Paradox/Olivia"></button>
+                  <div class="sa-sr-text"><div class="sa-sr-name">Paradox / Olivia</div><div class="sa-sr-desc">Conversational knockout via SMS/chat. Built for frontline/hourly — not senior or interdisciplinary roles.</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sa-filter-summary">
+          <span class="sa-fs-text"><strong id="sa-activeCount">9</strong> of 9 screeners shown — <span id="sa-filterNote">no filters applied</span></span>
+        </div>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="sa-legend">
+        <div class="sa-legend-item"><span class="sa-dot sa-d-pass"></span>Likely pass</div>
+        <div class="sa-legend-item"><span class="sa-dot sa-d-risk"></span>At risk</div>
+        <div class="sa-legend-item"><span class="sa-dot sa-d-fail"></span>Likely rejected</div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="sa-table-wrap">
+        <table class="sa-table">
+          <colgroup>
+            <col class="sa-col-resume">
+            <col class="sa-screener-col" data-id="workday"><col class="sa-screener-col" data-id="successfactors">
+            <col class="sa-screener-col" data-id="greenhouse"><col class="sa-screener-col" data-id="lever"><col class="sa-screener-col" data-id="ashby">
+            <col class="sa-screener-col" data-id="eightfold"><col class="sa-screener-col" data-id="phenom"><col class="sa-screener-col" data-id="hirevue"><col class="sa-screener-col" data-id="olivia">
+          </colgroup>
+          <thead>
+            <tr class="sa-group-hdr">
+              <th></th>
+              <th class="sa-screener-col" data-id="workday">Enterprise ATS</th><th class="sa-screener-col" data-id="successfactors"></th>
+              <th class="sa-screener-col" data-id="greenhouse">Mid-Market / Tech</th><th class="sa-screener-col" data-id="lever"></th><th class="sa-screener-col" data-id="ashby"></th>
+              <th class="sa-screener-col" data-id="eightfold">Layered / Specialty</th><th class="sa-screener-col" data-id="phenom"></th><th class="sa-screener-col" data-id="hirevue"></th><th class="sa-screener-col" data-id="olivia"></th>
+            </tr>
+            <tr>
+              <th>Resume / Track</th>
+              <th class="sa-screener-col" data-id="workday">Workday / HiredScore</th><th class="sa-screener-col" data-id="successfactors">SuccessFactors / Joule</th>
+              <th class="sa-screener-col" data-id="greenhouse">Greenhouse AI</th><th class="sa-screener-col" data-id="lever">Lever</th><th class="sa-screener-col" data-id="ashby">Ashby</th>
+              <th class="sa-screener-col" data-id="eightfold">Eightfold</th><th class="sa-screener-col" data-id="phenom">Phenom</th><th class="sa-screener-col" data-id="hirevue">HireVue</th><th class="sa-screener-col" data-id="olivia">Paradox / Olivia</th>
+            </tr>
+          </thead>
+          <tbody id="sa-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- CHECKLIST -->
+      <div class="sa-checklist-wrap" id="sa-checklist-wrap" style="display:none;">
+        <div class="sa-cl-title-row"><div class="sa-cl-title">Pre-Tailoring Checklist</div></div>
+        <div class="sa-cl-sub"><span class="sa-badge sa-b-pri">PRIORITY</span> fix once before any application. <span class="sa-badge sa-b-jd">RE-TAILOR</span> revisit per application. <span class="sa-badge sa-b-res">RESOLVED</span> already fixed. <span class="sa-badge sa-b-ok">&#10003; CLEAN</span> no action needed.</div>
+        <div id="sa-checklist-body"></div>
+      </div>
+
+      <div class="sa-footer">Cara A. Brown, MBA · caraabrown.com — AI Screener Assessment · live analysis, regenerated on resume change</div>
+    </div>
+
           <div class="panel" id="panel-job-input">
 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
         <div>
@@ -2913,6 +3153,7 @@ document.querySelectorAll('nav a[data-panel]').forEach(link => {
     document.getElementById('nav-overlay').classList.remove('open');
     if (panelId === 'dashboard') { renderDashboard(); maybeAutoFocus(); }
     if (panelId === 'next-steps') setTimeout(populateNsJobSelect, 50);
+    if (panelId === 'screener-assessment') { runScreenerAssessment(false); }
     if (['company-research','interview-prep','linkedin-outreach','salary-intel'].includes(panelId)) {
       setTimeout(populateIntelDropdowns, 50);
       if (panelId === 'company-research') restoreIntelOutput('company-research', 'research-tab-snapshot');
@@ -8521,6 +8762,244 @@ document.addEventListener('click', function(e){
     if(document.querySelector('#panel-my-resumes.active')) render();
   });
 })();
+
+// ─── SCREENER ASSESSMENT (Step 02) ─────────────────────────────────────────
+const SA_SCREENER_META = {
+  workday:        { size:['enterprise'],            industry:['retail','finance','health','consulting'], seniority:['exec','director','senior','early'] },
+  successfactors: { size:['enterprise'],            industry:['retail','finance','health','consulting'], seniority:['exec','director','senior','early'] },
+  greenhouse:     { size:['midmarket','enterprise'], industry:['tech','consulting'],                      seniority:['exec','director','senior','early'] },
+  lever:          { size:['midmarket','small'],      industry:['tech','consulting'],                      seniority:['director','senior','early'] },
+  ashby:          { size:['midmarket','small'],      industry:['tech'],                                   seniority:['director','senior','early'] },
+  eightfold:      { size:['enterprise'],            industry:['tech','retail','finance','health'],        seniority:['exec','director','senior'] },
+  phenom:         { size:['enterprise','midmarket'], industry:['retail','health','finance'],               seniority:['senior','early'] },
+  hirevue:        { size:['enterprise'],            industry:['finance','retail','health','consulting'],  seniority:['exec','director','senior','early'] },
+  olivia:         { size:['enterprise','midmarket'], industry:['retail','health'],                        seniority:['early'] },
+};
+const SA_SCREENER_NAMES = {
+  workday:'Workday / HiredScore', successfactors:'SuccessFactors / Joule', greenhouse:'Greenhouse AI',
+  lever:'Lever', ashby:'Ashby', eightfold:'Eightfold', phenom:'Phenom', hirevue:'HireVue', olivia:'Paradox / Olivia'
+};
+const SA_SCREENER_DESC = {
+  workday:'Ranks by title trajectory + historical outcome signals. Sub-scores career path consistency.',
+  successfactors:'Extracts skills via Joule and matches to Talent Intelligence Hub. Skills-first, not title-first.',
+  greenhouse:'Candidate summary from parsed text + structured scorecard. No auto-reject.',
+  lever:'JD-semantic ranking via Gem AI + pipeline history. Recruiter keyword search drives shortlisting.',
+  ashby:'Returns Meets / Does Not Meet per recruiter-defined criteria. No numeric rank, no auto-reject.',
+  eightfold:'Deep-skills inference + career trajectory model. Best at nonlinear profiles. Penalizes title/function mismatch.',
+  phenom:'Dynamic Fit Score weighted by keyword parity. Pre-apply chat can gate candidates before submission.',
+  hirevue:'BARS behavioral rubric scores async video transcripts. Quantified evidence scores highest.',
+  olivia:'Conversational knockout via SMS/chat. Built for frontline/hourly — not senior or interdisciplinary roles.'
+};
+const SA_COLS = Object.keys(SA_SCREENER_META);
+const SA_LS_HASH = 'cara_screener_hash';
+const SA_LS_CACHE = 'cara_screener_cache';
+let saManualOverrides = {};
+let saRunning = false;
+
+function saHashResumes(){
+  let str = '';
+  for (const [key, r] of Object.entries(RESUMES)) {
+    if (r.hidden) continue;
+    str += '|' + key + ':' + r.label + ':' + r.text.length + ':' + r.text.slice(0,60) + ':' + r.text.slice(-60);
+  }
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) { hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0; }
+  return String(hash);
+}
+
+function saGetChecked(name){
+  return [...document.querySelectorAll(`#panel-screener-assessment input[name="${name}"]:checked`)].map(el=>el.value);
+}
+function saScreenerMatchesFilters(id, sizes, industries, seniorities){
+  const m = SA_SCREENER_META[id];
+  if(!sizes.length && !industries.length && !seniorities.length) return true;
+  const sizeMatch     = !sizes.length      || sizes.some(s=>m.size.includes(s));
+  const industryMatch = !industries.length || industries.some(i=>m.industry.includes(i));
+  const seniorMatch   = !seniorities.length|| seniorities.some(s=>m.seniority.includes(s));
+  return sizeMatch && industryMatch && seniorMatch;
+}
+function saApplyFilters(){
+  const sizes       = saGetChecked('sa-size');
+  const industries  = saGetChecked('sa-industry');
+  const seniorities = saGetChecked('sa-seniority');
+  const hasFilter   = sizes.length || industries.length || seniorities.length;
+  let activeCount = 0;
+  SA_COLS.forEach(id=>{
+    const matched = saScreenerMatchesFilters(id, sizes, industries, seniorities);
+    const active = id in saManualOverrides ? saManualOverrides[id] : matched;
+    document.querySelectorAll(`#panel-screener-assessment [data-id="${id}"]`).forEach(el=>{
+      el.classList.toggle('sa-hidden', !active);
+      if(el.tagName==='COL') el.style.display = active?'':'none';
+    });
+    const row = document.querySelector(`#panel-screener-assessment .sa-screener-row[data-screener="${id}"]`);
+    if(row){ row.classList.toggle('sa-sr-active', active); row.classList.toggle('sa-sr-inactive', !active); }
+    if(active) activeCount++;
+  });
+  const cEl = document.getElementById('sa-activeCount'); if (cEl) cEl.textContent = activeCount;
+  const noteEl = document.getElementById('sa-filterNote');
+  if (noteEl) {
+    if(!hasFilter) noteEl.textContent = 'no filters applied';
+    else {
+      const parts = [];
+      if(sizes.length) parts.push(sizes.map(s=>({enterprise:'Large Enterprise',midmarket:'Mid-Market',small:'Small/Startup'}[s])).join(' + '));
+      if(industries.length) parts.push(industries.map(i=>({tech:'Tech',retail:'Retail/Logistics',finance:'Finance',health:'Healthcare',nonprofit:'Nonprofit/Gov',consulting:'Consulting'}[i])).join(' + '));
+      if(seniorities.length) parts.push(seniorities.map(s=>({exec:'Executive/VP',director:'Director/Principal',senior:'Senior/Manager',early:'Early Career'}[s])).join(' + '));
+      noteEl.textContent = parts.join(' · ');
+    }
+  }
+}
+function saManualToggle(id){
+  const row = document.querySelector(`#panel-screener-assessment .sa-screener-row[data-screener="${id}"]`);
+  if (!row) return;
+  const currentlyActive = row.classList.contains('sa-sr-active');
+  if(currentlyActive && document.querySelectorAll('#panel-screener-assessment .sa-screener-row.sa-sr-active').length===1) return;
+  saManualOverrides[id] = !currentlyActive;
+  saApplyFilters();
+}
+function saResetFilters(){
+  document.querySelectorAll('#panel-screener-assessment input.sa-filter-cb').forEach(cb=>cb.checked=false);
+  saManualOverrides = {};
+  saApplyFilters();
+}
+function saToggleRow(btn){
+  const tr = btn.closest('tr.sa-data-row');
+  const collapsed = tr.classList.toggle('sa-collapsed');
+  btn.textContent = collapsed ? '▼ SHOW' : '▲ HIDE';
+}
+
+function saBuildSkeleton(){
+  const tbody = document.getElementById('sa-tbody');
+  if (!tbody) return;
+  let html = '';
+  for (const [key, r] of Object.entries(RESUMES)) {
+    if (r.hidden) continue;
+    html += `<tr class="sa-sec-hdr"><td colspan="10">${escHtml(r.label)}</td></tr>`;
+    html += `<tr class="sa-data-row" data-resume="${key}"><td><div class="sa-row-title">${escHtml(r.label)}<button class="sa-collapse-btn" onclick="saToggleRow(this)">▲ HIDE</button></div><div class="sa-row-sub">—</div></td>`;
+    SA_COLS.forEach(id => {
+      html += `<td class="sa-screener-col" data-id="${id}" data-resume="${key}" data-screener="${id}"><div class="sa-cell"><div class="sa-verdict"><span class="sa-dot"></span><span class="sa-verdict-word">Pending</span></div><div class="sa-note">Not yet analyzed.</div></div></td>`;
+    });
+    html += `</tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+async function runScreenerAssessment(force){
+  if (saRunning) return;
+  const cacheRaw = localStorage.getItem(SA_LS_CACHE);
+  const cachedHash = localStorage.getItem(SA_LS_HASH);
+  const currentHash = saHashResumes();
+  saBuildSkeleton();
+  saApplyFilters();
+
+  if (!force && cacheRaw && cachedHash === currentHash) {
+    try { saRenderResults(JSON.parse(cacheRaw), true); return; } catch(e) { /* fall through to re-run */ }
+  }
+
+  const apiKey = localStorage.getItem('cara_api_key') || '';
+  const statusText = document.getElementById('sa-status-text');
+  if (!apiKey) {
+    if (statusText) statusText.textContent = 'Add your API key (⚙ header) to run live analysis.' + (cacheRaw ? ' Showing last saved results below.' : '');
+    if (cacheRaw) { try { saRenderResults(JSON.parse(cacheRaw), true); } catch(e){} }
+    return;
+  }
+
+  saRunning = true;
+  const loadingEl = document.getElementById('sa-loading');
+  const errorEl = document.getElementById('sa-error');
+  const rerunBtn = document.getElementById('sa-rerun-btn');
+  if (loadingEl) loadingEl.classList.add('visible');
+  if (errorEl) errorEl.textContent = '';
+  if (rerunBtn) rerunBtn.style.display = 'none';
+
+  const resumeEntries = Object.entries(RESUMES).filter(([k,r]) => !r.hidden);
+  const resumeBlock = resumeEntries.map(([k,r]) => 'KEY: ' + k + '\nLABEL: ' + r.label + '\n---\n' + r.text).join('\n\n======\n\n');
+  const screenerBlock = SA_COLS.map(id => id + ': ' + SA_SCREENER_NAMES[id] + ' — ' + SA_SCREENER_DESC[id]).join('\n');
+  const cellTotal = resumeEntries.length * SA_COLS.length;
+
+  const systemPrompt = 'You are an expert ATS and AI-recruiting-screener analyst. Be precise, honest, and specific to the actual resume text provided. Never invent resume content or inflate verdicts. Output STRICT JSON only — no markdown code fences, no prose before or after the JSON.';
+  const userMsg = [
+    'For EACH resume below, assess how it would likely be scored or ranked by EACH of these 9 hiring platforms:',
+    screenerBlock,
+    '',
+    'RESUMES:',
+    resumeBlock,
+    '',
+    'Return STRICT JSON matching exactly this shape (no markdown fences, no extra commentary):',
+    '{"cells":[{"resume":"<resume key>","screener":"<screener id>","verdict":"pass|risk|fail","note":"<1-2 sentence explanation citing actual resume content>"}],"checklist":{"universal":[{"badge":"priority|jd|resolved|ok","text":"<action item>"}],"by_resume":{"<resume key>":[{"badge":"priority|jd|resolved|ok","text":"<action item>"}]}}}',
+    'Include exactly one cell object for every resume-key × screener-id combination (' + resumeEntries.length + ' resumes × ' + SA_COLS.length + ' screeners = ' + cellTotal + ' cells total). If a resume contains placeholder/instructional text instead of real resume content, use verdict "risk" and note "No resume text added yet — paste it in Step 01." for every screener for that resume, and skip it in the checklist.'
+  ].join('\n');
+
+  try {
+    let raw = '';
+    await callClaude(systemPrompt, userMsg, (text) => { raw = text; });
+    const cleaned = raw.replace(/```json|```/g,'').trim();
+    const data = JSON.parse(cleaned);
+    localStorage.setItem(SA_LS_CACHE, JSON.stringify(data));
+    localStorage.setItem(SA_LS_HASH, currentHash);
+    saRenderResults(data, false);
+  } catch(e) {
+    if (errorEl) errorEl.textContent = 'Analysis failed: ' + e.message + '.' + (cacheRaw ? ' Showing last saved results.' : '');
+    if (cacheRaw) { try { saRenderResults(JSON.parse(cacheRaw), true); } catch(e2){} }
+  } finally {
+    if (loadingEl) loadingEl.classList.remove('visible');
+    saRunning = false;
+  }
+}
+
+function saRenderResults(data, fromCache){
+  const cellMap = {};
+  (data.cells||[]).forEach(c => { cellMap[c.resume+'::'+c.screener] = c; });
+  let passCount=0, riskCount=0, failCount=0, total=0;
+  document.querySelectorAll('#sa-tbody tr.sa-data-row').forEach(tr => {
+    const resumeKey = tr.dataset.resume;
+    tr.querySelectorAll('td.sa-screener-col').forEach(td => {
+      const screenerId = td.dataset.screener;
+      const c = cellMap[resumeKey+'::'+screenerId];
+      const dot = td.querySelector('.sa-dot');
+      const word = td.querySelector('.sa-verdict-word');
+      const note = td.querySelector('.sa-note');
+      if (c && dot && word && note) {
+        total++;
+        const v = (c.verdict||'risk').toLowerCase();
+        if (v==='pass') passCount++; else if (v==='fail') failCount++; else riskCount++;
+        dot.className = 'sa-dot ' + (v==='pass'?'sa-d-pass':v==='fail'?'sa-d-fail':'sa-d-risk');
+        word.className = 'sa-verdict-word ' + (v==='pass'?'sa-pass':v==='fail'?'sa-fail':'sa-risk');
+        word.textContent = v==='pass' ? 'Pass' : v==='fail' ? 'Likely Rejected' : 'At Risk';
+        note.textContent = c.note || '';
+      }
+    });
+  });
+  const statusText = document.getElementById('sa-status-text');
+  const rerunBtn = document.getElementById('sa-rerun-btn');
+  const now = new Date();
+  const stamp = now.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' at ' + now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  if (statusText) statusText.textContent = (fromCache ? 'Last analyzed ' : 'Analyzed just now — ') + stamp + '. ' + passCount + ' pass · ' + riskCount + ' at risk · ' + failCount + ' likely rejected across ' + total + ' checks.';
+  if (rerunBtn) rerunBtn.style.display = 'inline-block';
+
+  const cl = data.checklist || {};
+  const badgeLabel = { priority:'PRIORITY', jd:'RE-TAILOR', resolved:'RESOLVED', ok:'✓ CLEAN' };
+  const badgeClass = { priority:'sa-b-pri', jd:'sa-b-jd', resolved:'sa-b-res', ok:'sa-b-ok' };
+  function saItemsHtml(items, prefix){
+    return (items||[]).map((it,i) => {
+      const b = it.badge || 'jd';
+      return '<li class="sa-cl-item"><input type="checkbox" id="'+prefix+i+'"><label for="'+prefix+i+'"><span class="sa-badge '+(badgeClass[b]||'sa-b-jd')+'">'+(badgeLabel[b]||'RE-TAILOR')+'</span>'+escHtml(it.text||'')+'</label></li>';
+    }).join('');
+  }
+  let clHtml = '';
+  if (cl.universal && cl.universal.length) {
+    clHtml += '<div class="sa-cl-section"><div class="sa-cl-section-title">All Resumes — Universal</div><ul class="sa-cl-list">'+saItemsHtml(cl.universal,'sau')+'</ul></div>';
+  }
+  Object.entries(cl.by_resume || {}).forEach(([key, items]) => {
+    const label = (RESUMES[key] && RESUMES[key].label) || key;
+    if (items && items.length) {
+      clHtml += '<div class="sa-cl-section"><div class="sa-cl-section-title">'+escHtml(label)+'</div><ul class="sa-cl-list">'+saItemsHtml(items,'sa'+key)+'</ul></div>';
+    }
+  });
+  const clWrap = document.getElementById('sa-checklist-wrap');
+  const clBody = document.getElementById('sa-checklist-body');
+  if (clBody) clBody.innerHTML = clHtml;
+  if (clWrap) clWrap.style.display = clHtml ? 'block' : 'none';
+}
 
 </script>
 </body>

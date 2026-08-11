@@ -1810,7 +1810,7 @@
                     <button class="btn" onclick="downloadGrAsHTML(this)">Download Styled HTML</button>
                   </div>
                 </div>
-                <div id="gr-output" style="white-space:pre-wrap;font-size:0.82rem;font-family:'Instrument Sans',sans-serif;line-height:1.75;color:var(--black);background:var(--bgoff);border:1px solid var(--border);border-radius:4px;padding:1.5rem;"></div>
+                <div id="gr-output" style="font-variant-ligatures:none;font-size:0.82rem;font-family:'Instrument Sans',sans-serif;line-height:1.75;color:var(--black);background:var(--bgoff);border:1px solid var(--border);border-radius:4px;padding:1.5rem;overflow-wrap:anywhere;"></div>
               </div>
             </div>
 
@@ -5919,8 +5919,9 @@ document.getElementById('gen-edits-btn').addEventListener('click', async () => {
 
   // Detect round 2+ — a revised resume already exists from a prior generate
   const isRound2 = window._grResumeText && window._grResumeText.trim() && (window._leChatIndexAtLastResumeGenerate !== undefined);
-  const baseResumeText = isRound2 ? window._grResumeText : RESUMES[selectedLeResume]?.text;
-  const resume = isRound2 ? { label: 'Revised Resume (Round 2+)', text: baseResumeText } : RESUMES[selectedLeResume];
+  const rawBaseText = isRound2 ? window._grResumeText : RESUMES[selectedLeResume]?.text;
+  const baseResumeText = normalizeResumeText(rawBaseText || '');
+  const resume = isRound2 ? { label: 'Revised Resume (Round 2+)', text: baseResumeText } : { label: RESUMES[selectedLeResume]?.label || 'Resume', text: baseResumeText };
   const additionalExp = (document.getElementById('le-additional-exp').value || '').trim();
   const focusMap = {
     full: 'every section of the resume — synopsis, core competencies, and all experience bullets',
@@ -7200,6 +7201,42 @@ document.addEventListener('change', function(e) {
 
 // ─── GENERATE RESUME FROM SELECTED EDITS ──────────────────────────────────────
 
+// ─── RESUME TEXT NORMALIZATION ─────────────────────────────────────────────
+// Cleans PDF extraction artifacts: footer/page-indicator lines, split ligatures,
+// and stray whitespace that corrupt the preview and downstream ATS checks.
+function normalizeResumeText(text) {
+  if (!text || !text.trim()) return text || '';
+  let lines = text.split('\n');
+  // Remove footer/page-indicator lines
+  lines = lines.filter(line => {
+    const t = line.trim();
+    if (!t) return true; // keep blank lines
+    // Standalone "Page X of Y" or "Page X"
+    if (/^Page\s+\d+\s*(of\s*\d+)?\s*$/i.test(t)) return false;
+    // Footer line: "Cara A. Brown, MBA · Page X of Y · caraabrown.com" or variants
+    if (/caraabrown\.com/i.test(t) && /page\s+\d+/i.test(t)) return false;
+    // Standalone "caraabrown.com" (footer remnant)
+    if (/^caraabrown\.com\s*$/i.test(t)) return false;
+    // Footer with name + page + url
+    if (/Cara\s*A\.?\s*Brown/i.test(t) && /page\s+\d+/i.test(t)) return false;
+    return true;
+  });
+  let out = lines.join('\n');
+  // Fix split ligatures from PDF extraction: "fi lled" → "filled", "fl ows" → "flows"
+  // Also handles mid-word: "defi ne" → "define", "satisfi ed" → "satisfied"
+  // Matches "fi"/"fl" followed by whitespace and 2+ lowercase letters
+  out = out.replace(/fi\s+(?=[a-z]{2,})/gi, 'fi');
+  out = out.replace(/fl\s+(?=[a-z]{2,})/gi, 'fl');
+  // Also fix ffi/ffl splits
+  out = out.replace(/ffi\s+(?=[a-z]{2,})/gi, 'ffi');
+  out = out.replace(/ffl\s+(?=[a-z]{2,})/gi, 'ffl');
+  // Collapse 3+ consecutive newlines to 2 (preserves paragraph breaks)
+  out = out.replace(/\n{3,}/g, '\n\n');
+  // Trim trailing whitespace per line
+  out = out.split('\n').map(l => l.replace(/\s+$/, '')).join('\n');
+  return out.trim();
+}
+
 function applyEditsDirectly(baseResume, checkedEdits) {
   let patched = baseResume;
   let applied = 0, skipped = 0;
@@ -7230,8 +7267,10 @@ function validateResumeOutput(text, baseResume) {
 
 function generateResumeFromEdits(btn) {
   // Use the latest revised resume as base in round 2+, fall back to original
-  const baseResume = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
-  if (!baseResume) { alert('No base resume selected.'); return; }
+  // Normalize to clean PDF extraction artifacts (footer lines, split ligatures)
+  const rawBase = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
+  if (!rawBase) { alert('No base resume selected.'); return; }
+  const baseResume = normalizeResumeText(rawBase);
 
   const blocks = document.querySelectorAll('#le-output .edit-block');
   const checkedEdits = [];
@@ -7267,20 +7306,22 @@ function generateResumeFromEdits(btn) {
 
   // Store the base resume snapshot that edits were applied to
   window._leBaseResumeText = baseResume;
+  // Normalize the patched output to clean any artifacts introduced by edits
+  const finalResume = normalizeResumeText(result.patched);
   // Store the generated resume
-  window._grResumeText = result.patched;
+  window._grResumeText = finalResume;
   window._grResumeKey = selectedLeResume;
   // Track chat note boundary — only notes after this point are new
   window._leChatIndexAtLastResumeGenerate = leHistory.length;
 
   // Populate page 07 textarea
   const rcTa = document.getElementById('updated-resume-text');
-  if (rcTa) rcTa.value = result.patched;
+  if (rcTa) rcTa.value = finalResume;
 
   // Render the full resume
-  document.getElementById('gr-output').innerHTML = renderResumePreview(result.patched);
+  document.getElementById('gr-output').innerHTML = renderResumePreview(finalResume);
   document.getElementById('gr-result').style.display = 'block';
-  storeResumeVersion(result.patched, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
+  storeResumeVersion(finalResume, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
 
   if (btn) {
     const orig = btn.textContent;
@@ -7293,21 +7334,33 @@ function generateResumeFromEdits(btn) {
 
 function renderResumePreview(text) {
   if (!text || !text.trim()) return '';
+  // Safety net: normalize in case caller didn't
+  text = normalizeResumeText(text);
   const ACCENT = '#2a4080'; const MID = '#888680'; const INK = '#1e1e1c'; const BLACK = '#0d0d0b'; const RULE = '#dddad3';
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function md(s){ return s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>'); }
   const lines = text.split('\n');
-  let html = `<div style="font-family:'Helvetica Neue',Arial,sans-serif;color:${INK};font-size:9pt;line-height:1.5;">`;
+  let html = `<div style="font-family:'Helvetica Neue',Arial,sans-serif;color:${INK};font-size:9pt;line-height:1.5;font-variant-ligatures:none;">`;
   let firstNameDone = false;
   let firstRuleDone = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]; const line = raw.trim();
     if (!line) { html += '<div style="height:5px;"></div>'; continue; }
-    // Name line (first non-empty)
+    // Name line (first non-empty) — split name from title on " — " or " - "
     if (!firstNameDone) {
       firstNameDone = true;
-      const parts = line.split(/,\s*/);
-      html += `<div style="font-size:20pt;font-weight:700;letter-spacing:-0.02em;color:${BLACK};line-height:1;margin-bottom:2px;">${esc(parts[0])}${parts[1]?`<span style="font-weight:300;">, ${esc(parts[1])}</span>`:''}</div>`;
+      let namePart = line, titlePart = '';
+      const dashSplit = line.split(/\s+[\u2014\-]\s+/);
+      if (dashSplit.length > 1) {
+        namePart = dashSplit[0];
+        titlePart = dashSplit.slice(1).join(' — ');
+      }
+      // Handle "NAME, MBA" suffix
+      const commaParts = namePart.split(/,\s*/);
+      html += `<div style="font-size:20pt;font-weight:700;letter-spacing:-0.02em;color:${BLACK};line-height:1;margin-bottom:2px;">${esc(commaParts[0])}${commaParts[1]?`<span style="font-weight:300;">, ${esc(commaParts[1])}</span>`:''}</div>`;
+      if (titlePart) {
+        html += `<div style="font-size:6.5pt;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:${ACCENT};margin-bottom:2px;">${esc(titlePart)}</div>`;
+      }
       continue;
     }
     // Title/role line (ALL CAPS long line containing · or — before contact info)
@@ -7315,31 +7368,36 @@ function renderResumePreview(text) {
       html += `<div style="font-size:6.5pt;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:${ACCENT};margin-bottom:2px;">${esc(line)}</div>`;
       continue;
     }
-    // Contact line (has @ or linkedin)
-    if (!firstRuleDone && (line.includes('@') || line.toLowerCase().includes('linkedin') || (line.includes('·') && line.toLowerCase().includes('caraabrown')))) {
+    // Contact line (has @ or linkedin or phone pattern)
+    if (!firstRuleDone && (line.includes('@') || line.toLowerCase().includes('linkedin') || /\(\d{3}\)\s*\d{3}/.test(line) || (line.includes('·') && line.toLowerCase().includes('caraabrown')))) {
       firstRuleDone = true;
       html += `<div style="font-size:7pt;font-weight:300;color:${MID};margin-bottom:4px;">${esc(line)}</div>`;
       html += `<div style="height:2px;background:${ACCENT};margin:4px 0 6px;"></div>`;
       continue;
     }
-    // Section heading: ALL CAPS short, no bullets, length > 2
-    if (line === line.toUpperCase() && line.length > 2 && line.length < 60 && !line.startsWith('—') && !line.includes('·')) {
+    // Section heading: ALL CAPS, 3-60 chars, no bullet chars, no middot
+    if (line === line.toUpperCase() && line.length > 2 && line.length < 60 && !line.startsWith('—') && !line.startsWith('•') && !line.includes('·') && !line.includes('|')) {
       html += `<div style="font-size:5.8pt;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${ACCENT};border-bottom:1px solid ${RULE};padding-bottom:2px;margin:8px 0 4px;">${esc(line)}</div>`;
       continue;
     }
-    // Bullet (em-dash or hyphen)
-    if (line.startsWith('—') || line.startsWith('\u2014') || (line.startsWith('•'))) {
-      const bulletText = line.replace(/^[—\u2014•]\s*/, '');
+    // Bullet (em-dash, en-dash, bullet, or hyphen-minus at start)
+    if (line.startsWith('—') || line.startsWith('\u2014') || line.startsWith('•') || line.startsWith('\u2022') || /^[-]\s+/.test(line)) {
+      const bulletText = line.replace(/^[—\u2014•\u2022\-]\s*/, '');
       html += `<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:2px;padding-left:4px;"><span style="color:${ACCENT};font-weight:700;flex-shrink:0;font-size:9pt;">—</span><span style="font-size:8pt;line-height:1.5;color:${INK};">${md(esc(bulletText))}</span></div>`;
       continue;
     }
-    // Job title line (has | or contains Designer/Strategist/Director/Manager etc and short)
-    if ((line.includes('|') || /Designer|Strategist|Director|Manager|Coordinator|Founder|Officer|Lead|Principal|Analyst|Consultant/.test(line)) && line.length < 100 && !line.startsWith('—')) {
+    // Job/org header line (has | and looks like a job entry)
+    if (line.includes('|') && line.length < 120 && !line.startsWith('—') && !line.startsWith('•')) {
       html += `<div style="font-size:8.5pt;font-weight:600;color:${ACCENT};margin-bottom:1px;">${md(esc(line))}</div>`;
       continue;
     }
-    // Colon-separated detail (e.g. "TOOLS: Figma | Miro")
-    if (/^[A-Z\s]+:/.test(line) && line.length < 200) {
+    // Job title line (contains role keywords and is short)
+    if (/Designer|Strategist|Director|Manager|Coordinator|Founder|Officer|Lead|Principal|Analyst|Consultant/.test(line) && line.length < 100 && !line.startsWith('—') && !line.startsWith('•')) {
+      html += `<div style="font-size:8.5pt;font-weight:600;color:${ACCENT};margin-bottom:1px;">${md(esc(line))}</div>`;
+      continue;
+    }
+    // Colon-separated detail (e.g. "TOOLS: Figma | Miro" or "CATEGORY: detail...")
+    if (/^[A-Z\s&]+:/.test(line) && line.length < 300) {
       const ci = line.indexOf(':');
       html += `<div style="font-size:7.5pt;line-height:1.5;margin-bottom:2px;"><span style="font-weight:700;color:${BLACK};">${esc(line.substring(0,ci+1))}</span> <span style="color:${MID};">${esc(line.substring(ci+1).trim())}</span></div>`;
       continue;

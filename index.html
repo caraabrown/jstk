@@ -3106,7 +3106,7 @@ function attachPillListeners() {
       const confirmName = document.getElementById('le-resume-confirm-name');
       if (pill.classList.contains('selected')) {
         pill.classList.remove('selected');
-        selectedLeResume = atsHighestResume || null;
+        setLeResume(atsHighestResume || null);
         document.getElementById('le-auto-hint').style.display = atsHighestResume ? 'block' : 'none';
         if (confirm && confirmName) {
           confirmName.textContent = atsHighestResume ? RESUMES[atsHighestResume].label : '(none selected)';
@@ -3115,7 +3115,7 @@ function attachPillListeners() {
       } else {
         document.querySelectorAll('#le-resume-pills .pill').forEach(p => p.classList.remove('selected'));
         pill.classList.add('selected');
-        selectedLeResume = pill.dataset.resume;
+        setLeResume(pill.dataset.resume);
         document.getElementById('le-auto-hint').style.display = 'none';
         if (confirm && confirmName) { confirmName.textContent = RESUMES[pill.dataset.resume]?.label || pill.dataset.resume; confirm.style.display = 'block'; }
       }
@@ -5878,6 +5878,20 @@ document.getElementById('new-application-btn').addEventListener('click', () => {
   document.getElementById('panel-job-input').classList.add('active');
 });
 let selectedLeResume = 'principal_ds';
+function setLeResume(newKey) {
+  if (newKey !== selectedLeResume) {
+    // Switching resumes/jobs must not carry over a stale revised-resume
+    // snapshot from a different resume — that cross-contamination silently
+    // fed the wrong base text into Generate Resume / Generate Line-by-Line
+    // Edits and produced incomplete or mismatched output.
+    window._grResumeText = null;
+    window._grResumeKey = null;
+    window._leBaseResumeText = null;
+    window._leChatIndexAtLastResumeGenerate = undefined;
+  }
+  selectedLeResume = newKey;
+}
+
 let selectedLeFocus = 'full';
 let atsHighestResume = localStorage.getItem('cara_sess_ats_highest') || null;
 
@@ -5905,7 +5919,7 @@ function autoSelectBestResume(resumeKey, resumeLabel) {
   document.querySelectorAll('#le-resume-pills .pill').forEach(p => {
     p.classList.toggle('selected', p.dataset.resume === resumeKey);
   });
-  selectedLeResume = resumeKey;
+  setLeResume(resumeKey);
   document.getElementById('le-auto-resume-name').textContent = resumeLabel;
   document.getElementById('le-auto-hint').style.display = 'block';
   const confirm = document.getElementById('le-resume-confirm');
@@ -7259,7 +7273,7 @@ function applyEditsDirectly(baseResume, checkedEdits) {
 function validateResumeOutput(text, baseResume) {
   if (!text || !text.trim()) return { valid: false, reason: 'Output is empty.' };
   if (text.length < baseResume.length * 0.5) return { valid: false, reason: 'Output is less than half the length of the base resume — likely incomplete.' };
-  const anchors = ['@', 'linkedin', /experience/i, /education/i];
+  const anchors = ['@', /linkedin/i, /experience/i, /education/i];
   const matched = anchors.filter(a => new RegExp(a).test(text)).length;
   if (matched < 2) return { valid: false, reason: 'Output is missing key resume sections (contact, experience, education).' };
   return { valid: true };

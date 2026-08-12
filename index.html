@@ -7741,6 +7741,141 @@ function copyGrOutput(btn) {
   });
 }
 
+// ─── RESUME PAGE OVERFLOW REBALANCER ──────────────────────────────────────
+// Root-cause fix: .page divs are fixed 8.5x11in with overflow:hidden, and the
+// AI-generated HTML only *estimates* what fits per page. When the estimate is
+// wrong, overflow:hidden silently clips resume content with no error shown.
+// This walks the real rendered DOM (in an offscreen iframe) and pushes any
+// overflowing content forward onto later pages (creating new pages if
+// needed, and splitting job bullets with a "(continued)" header) until every
+// .page fits within its own height. Content is only ever moved, never
+// deleted, so the full resume is guaranteed to appear somewhere in the output.
+function _rebalanceResumePagesDOM(doc) {
+  const MAX_ITER = 800;
+  function getPages() { return Array.from(doc.querySelectorAll('.page')); }
+  function nonFooterChildren(page) {
+    return Array.from(page.children).filter(c => !(c.classList && c.classList.contains('resume-footer')));
+  }
+  function createPageAfter(page) {
+    const newPage = doc.createElement('div');
+    newPage.className = 'page';
+    const footer = page.querySelector('.resume-footer');
+    if (footer) newPage.appendChild(footer.cloneNode(true));
+    page.parentNode.insertBefore(newPage, page.nextSibling);
+    return newPage;
+  }
+  function ensureJobId(block) {
+    if (!block.dataset.jobId) block.dataset.jobId = 'j' + Math.random().toString(36).slice(2, 9);
+    return block.dataset.jobId;
+  }
+  function moveLastUnitForward(page) {
+    const pages = getPages();
+    const idx = pages.indexOf(page);
+    let next = pages[idx + 1];
+    if (!next) next = createPageAfter(page);
+    const kids = nonFooterChildren(page);
+    if (!kids.length) return false;
+    const last = kids[kids.length - 1];
+
+    // Prefer splitting off just the last bullet of a job-block, with a
+    // "(continued)" header on the next page, over moving the whole block.
+    if (last.classList && last.classList.contains('job-block')) {
+      const ul = last.querySelector('ul.bullets, ul');
+      const items = ul ? Array.from(ul.children) : [];
+      if (items.length > 1) {
+        const jobId = ensureJobId(last);
+        let contBlock = next.querySelector('.job-block[data-job-id="' + jobId + '"]');
+        if (!contBlock) {
+          contBlock = doc.createElement('div');
+          contBlock.className = 'job-block';
+          contBlock.dataset.jobId = jobId;
+          const header = last.querySelector('.job-header');
+          if (header) {
+            const clonedHeader = header.cloneNode(true);
+            const orgEl = clonedHeader.querySelector('.job-org');
+            if (orgEl && !/\(continued\)/i.test(orgEl.textContent || '')) {
+              orgEl.textContent = orgEl.textContent + ' (continued)';
+            }
+            contBlock.appendChild(clonedHeader);
+          }
+          const newUl = doc.createElement('ul');
+          newUl.className = (ul && ul.className) || 'bullets';
+          contBlock.appendChild(newUl);
+          next.insertBefore(contBlock, next.firstChild);
+        }
+        const contUl = contBlock.querySelector('ul');
+        const moving = items[items.length - 1];
+        contUl.insertBefore(moving, contUl.firstChild);
+        return true;
+      }
+    }
+    // Fallback: move the whole trailing unit to the top of the next page.
+    next.insertBefore(last, next.firstChild);
+    return true;
+  }
+
+  let iter = 0;
+  let moved = true;
+  while (moved && iter++ < MAX_ITER) {
+    moved = false;
+    const pages = getPages();
+    for (let i = 0; i < pages.length; i++) {
+      const p = pages[i];
+      if (p.scrollHeight > p.clientHeight + 2) {
+        if (moveLastUnitForward(p)) moved = true;
+      }
+    }
+  }
+
+  // Drop trailing pages that ended up with no real content.
+  let pages = getPages();
+  while (pages.length > 1) {
+    const lastP = pages[pages.length - 1];
+    if (nonFooterChildren(lastP).length === 0) {
+      lastP.remove();
+      pages = getPages();
+    } else break;
+  }
+
+  // Renumber "Page X of N" footers to match the final page count.
+  pages = getPages();
+  const total = pages.length;
+  pages.forEach((p, i) => {
+    const footer = p.querySelector('.resume-footer');
+    if (footer) {
+      footer.innerHTML = footer.innerHTML.replace(/Page\s*\d+\s*of\s*\d+/i, 'Page ' + (i + 1) + ' of ' + total);
+    }
+  });
+  return total;
+}
+
+function rebalanceResumeHTML(html) {
+  return new Promise((resolve) => {
+    const holder = document.createElement('iframe');
+    holder.style.cssText = 'position:fixed;top:0;left:-99999px;width:900px;height:1400px;border:0;visibility:hidden;';
+    document.body.appendChild(holder);
+    let settled = false;
+    function finish(resultHtml) {
+      if (settled) return;
+      settled = true;
+      try { document.body.removeChild(holder); } catch(e) {}
+      resolve(resultHtml);
+    }
+    holder.onload = () => {
+      try {
+        const doc = holder.contentDocument;
+        if (!doc || !doc.body || !doc.querySelector('.page')) { finish(html); return; }
+        _rebalanceResumePagesDOM(doc);
+        finish('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+      } catch (e) {
+        finish(html);
+      }
+    };
+    setTimeout(() => finish(html), 4000);
+    holder.srcdoc = html;
+  });
+}
+
 async function generateStyledResumeHTML(text, pageCount, label) {
   // CSS varies by page count per style guide v2
   const is2page = pageCount === '2';
@@ -7839,6 +7974,7 @@ ${STRUCTURE}`;
   let html = '';
   await callClaude(sysPrompt, `Role label: ${label}\n\nCSS to embed in <style> tag:\n${CSS}\n\n---\n\nPlain-text resume to format:\n${text}\n\nProduce the complete HTML file.`, (t) => { html = t; });
   html = html.replace(/^```html\n?|^```\n?|```$/gm, '').trim();
+  html = await rebalanceResumeHTML(html);
   return html;
 }
 

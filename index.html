@@ -7411,7 +7411,7 @@ function renderResumePreview(text) {
       continue;
     }
     // Colon-separated detail (e.g. "TOOLS: Figma | Miro" or "CATEGORY: detail...")
-    if (/^[A-Z\s&]+:/.test(line) && line.length < 300) {
+    if (/^[A-Z\s&,\-]+:/.test(line) && line.length < 1000) {
       const ci = line.indexOf(':');
       html += `<div style="font-size:7.5pt;line-height:1.5;margin-bottom:2px;"><span style="font-weight:700;color:${BLACK};">${esc(line.substring(0,ci+1))}</span> <span style="color:${MID};">${esc(line.substring(ci+1).trim())}</span></div>`;
       continue;
@@ -7958,8 +7958,8 @@ body{font-family:'Helvetica Neue',Arial,sans-serif;background:#7a7975;-webkit-fo
 - .resume-footer — "Cara A. Brown, MBA" · "Page X of ${pageCount}" · "caraabrown.com" — MANDATORY on every page, last child of every .page`;
 
   const pageInstructions = is2page
-    ? `TARGET: exactly 2 pages. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued · Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Be concise — 1–2 most impactful bullets per role if needed to fit.`
-    : `TARGET: exactly 3 pages. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued (flows until full) · Footer. Page 3: Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Include all bullets for major roles. Never leave a page mostly empty.`;
+    ? `TARGET: 2 pages as the baseline layout. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued · Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Include every bullet from the source resume — never shorten to "1-2 most impactful bullets" or drop any bullet, job, or section to make it fit. If content does not fit on 2 pages, add a 3rd (or further) .page div and continue the flow there — an automatic downstream rebalancer will add pages as needed, so there is no page-count penalty for exceeding the target.`
+    : `TARGET: 3 pages as the baseline layout. Page 1: Header · hbar · Synopsis · Areas of Expertise · Tools · Professional Experience (flows until page full) · Footer. Page 2: Professional Experience continued (flows until full) · Footer. Page 3: Additional Experience · Education & Certifications · Leadership & Affiliations · Footer. Include EVERY bullet for EVERY role, in full — never omit, condense, or drop any bullet, job, or section. Never leave a page mostly empty. If content does not fit on 3 pages, add a 4th (or further) .page div and continue the flow there — an automatic downstream rebalancer will add pages as needed, so there is no page-count penalty for exceeding the target.`;
 
   const sysPrompt = `You are a precise resume HTML formatter. Convert the plain-text resume into a complete, print-ready HTML file using the provided CSS and class structure. Source of truth: Cara A. Brown Resume Style Guide v2.
 Rules:
@@ -7978,7 +7978,7 @@ Rules:
 - FOOTER IS MANDATORY on every single .page div — last child element, no exceptions
 - ABSOLUTE BAN — never insert spaces between individual letters. "A R E A S O F E X P E R T I S E" is forbidden. Section label text must be unspaced words: "AREAS OF EXPERTISE" not "A R E A S O F E X P E R T I S E"
 - Every .page MUST have display:flex; flex-direction:column — required for footer to pin to bottom
-- Content flows naturally page to page — BANNED: locking any content to a specific page, leaving a page mostly empty, overflowing any page
+- Content flows naturally page to page — BANNED: locking any content to a specific page, leaving a page mostly empty, overflowing any page, or omitting/condensing any bullet, job entry, or section to force content into a target page count. Completeness always wins over page count — add pages rather than cut content.
 - Alanne International: in Professional Experience, dated 01/2026–Present
 - GardaWorld: in Additional Experience, no dates
 - No graduation years in Education

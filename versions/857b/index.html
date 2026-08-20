@@ -1788,9 +1788,9 @@
                 <div>
                   <div style="font-family:'Raleway',sans-serif;font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--mid);margin-bottom:0.3rem;">Next Step</div>
                   <strong style="font-size:1rem;font-family:'Open Sans',sans-serif;color:var(--black);">Generate Full Resume with Selected Edits</strong>
-                  <div style="font-size:0.8rem;color:var(--mid);margin-top:0.3rem;">Check the edits above, then click Generate. Selected edits are applied directly to produce the complete updated resume — no AI call needed.</div>
+                  <div style="font-size:0.8rem;color:var(--mid);margin-top:0.3rem;">Check the edits above, then click Generate. Claude assembles the complete, full resume with only the selected edits applied.</div>
                 </div>
-                <button class="btn" id="gen-resume-btn" onclick="generateResumeFromEdits(this)" title="Apply selected edits directly to the resume — fast, no AI call needed">Generate Resume</button>
+                <button class="btn" id="gen-resume-btn" onclick="generateResumeFromEdits(this)" title="Generate the complete resume with the selected edits applied">Generate Resume</button>
               </div>
               <div class="loading" id="gr-loading" style="display:none;"><div class="spinner"></div>Applying selected edits…</div>
               <div class="error-msg" id="gr-error"></div>
@@ -6238,7 +6238,7 @@ function renderEditBlocks(rawText, container) {
     const impact = parseInt(scoreImpact) || 0;
     const editId = 'edit-block-' + i;
     const isInsert = before === 'INSERT' || (type || '').toLowerCase() === 'insert';
-    html += `<div class="edit-block" id="${editId}" data-impact="${impact}" data-checked="false" data-before="${escHtml(before)}" data-after="${escHtml(after)}" data-isinsert="${isInsert}" data-why="${escHtml(why)}" style="${fromChat ? 'border-left:3px solid #7c3aed;background:#faf5ff;' : ''}">
+    html += `<div class="edit-block" id="${editId}" data-impact="${impact}" data-checked="false" data-section="${escHtml(section)}" data-before="${escHtml(before)}" data-after="${escHtml(after)}" data-isinsert="${isInsert}" data-why="${escHtml(why)}" style="${fromChat ? 'border-left:3px solid #7c3aed;background:#faf5ff;' : ''}">
    <div class="edit-block-header">
         <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
           <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;margin:0;">
@@ -7169,25 +7169,6 @@ document.addEventListener('change', function(e) {
 
 // ─── GENERATE RESUME FROM SELECTED EDITS ──────────────────────────────────────
 
-function applyEditsDirectly(baseResume, checkedEdits) {
-  let patched = baseResume;
-  let applied = 0, skipped = 0;
-  const skippedEdits = [];
-  checkedEdits.forEach((e, i) => {
-    if (e.isInsert) {
-      patched += '\n' + e.after;
-      applied++;
-    } else if (e.before && patched.includes(e.before)) {
-      patched = patched.replace(e.before, e.after);
-      applied++;
-    } else {
-      skipped++;
-      skippedEdits.push(i + 1);
-    }
-  });
-  return { patched, applied, skipped, skippedEdits };
-}
-
 function validateResumeOutput(text, baseResume) {
   if (!text || !text.trim()) return { valid: false, reason: 'Output is empty.' };
   if (text.length < baseResume.length * 0.5) return { valid: false, reason: 'Output is less than half the length of the base resume — likely incomplete.' };
@@ -7197,10 +7178,12 @@ function validateResumeOutput(text, baseResume) {
   return { valid: true };
 }
 
-function generateResumeFromEdits(btn) {
+async function generateResumeFromEdits(btn) {
   // Use the latest revised resume as base in round 2+, fall back to original
-  const baseResume = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
-  if (!baseResume) { alert('No base resume selected.'); return; }
+  // Normalize to clean PDF extraction artifacts (footer lines, split ligatures)
+  const rawBase = window._grResumeText || RESUMES[selectedLeResume]?.text || '';
+  if (!rawBase) { alert('No base resume selected.'); return; }
+  const baseResume = normalizeResumeText(rawBase);
 
   const blocks = document.querySelectorAll('#le-output .edit-block');
   const checkedEdits = [];
@@ -7208,6 +7191,7 @@ function generateResumeFromEdits(btn) {
     const cb = b.querySelector('input[type="checkbox"]');
     if (cb && cb.checked) {
       checkedEdits.push({
+        section: b.dataset.section || '',
         before: b.dataset.before || '',
         after: b.dataset.after || '',
         isInsert: b.dataset.isinsert === 'true'
@@ -7220,43 +7204,70 @@ function generateResumeFromEdits(btn) {
   // Record acceptance rate
   recordEditDecision(checkedEdits.length, blocks.length);
 
-  // Apply edits directly — no AI call
-  const result = applyEditsDirectly(baseResume, checkedEdits);
-  if (result.applied === 0) {
-    alert('No checked edits could be matched to the resume text. The BEFORE text in the edit cards may not exactly match the resume.');
-    return;
-  }
+  const editsList = checkedEdits.map((e, i) => {
+    const label = e.section ? ` [${e.section}]` : '';
+    return e.isInsert
+      ? `EDIT ${i + 1}${label} \u2014 INSERT NEW LINE:\n"${e.after}"`
+      : `EDIT ${i + 1}${label} \u2014 REPLACE:\n"${e.before}"\nWITH:\n"${e.after}"`;
+  }).join('\n\n');
 
-  // Validate output
-  const validation = validateResumeOutput(result.patched, baseResume);
-  if (!validation.valid) {
-    alert('Validation failed: ' + validation.reason + ' Please review the edits and try again.');
-    return;
-  }
+  const systemPrompt = `You are assembling a final, complete resume from a base resume and a list of pre-approved edits. Every edit listed has already been reviewed and approved by the candidate \u2014 your only job is to apply them and output the full resulting resume, start to finish.
 
-  // Store the base resume snapshot that edits were applied to
-  window._leBaseResumeText = baseResume;
-  // Store the generated resume
-  window._grResumeText = result.patched;
-  window._grResumeKey = selectedLeResume;
-  // Track chat note boundary — only notes after this point are new
-  window._leChatIndexAtLastResumeGenerate = leHistory.length;
+CRITICAL RULES (non-negotiable):
+- Apply ONLY the listed edits. Do not make any other wording, structural, or content change.
+- Never invent, add, or remove any employer, title, credential, metric, tool, or skill beyond what the listed edits specify.
+- Preserve every section, job entry, and bullet from the base resume that is not targeted by an edit \u2014 copy it through verbatim, including exact wording and line breaks.
+- Never omit, condense, cut, or summarize any part of the resume to save space. Output the ENTIRE resume from the header through the last line.
+- If an edit's BEFORE text cannot be found verbatim in the base resume, use your best judgment to locate the closest matching line by meaning and apply the AFTER text there \u2014 do not skip it and do not fabricate a new line for it.
+- Output plain text only: one line per resume line, section headers in ALL CAPS on their own line, a blank line between sections, bullets on their own lines starting with an em dash (\u2014). No markdown formatting, no commentary, no preamble, no explanations \u2014 output only the final resume text.`;
 
-  // Populate page 07 textarea
-  const rcTa = document.getElementById('updated-resume-text');
-  if (rcTa) rcTa.value = result.patched;
+  const userMsg = `BASE RESUME (apply the approved edits to this text; keep everything else exactly as-is):\n${baseResume}\n\nAPPROVED EDITS TO APPLY (${checkedEdits.length} total):\n${editsList}\n\nOutput the complete, final resume text with the above edits applied and everything else preserved exactly.`;
 
-  // Render the full resume
-  document.getElementById('gr-output').innerHTML = renderResumePreview(result.patched);
-  document.getElementById('gr-result').style.display = 'block';
-  storeResumeVersion(result.patched, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
+  showLoading('gr-loading');
+  hideError('gr-error');
+  document.getElementById('gr-result').style.display = 'none';
 
-  if (btn) {
-    const orig = btn.textContent;
-    btn.textContent = `\u2713 ${result.applied} edit${result.applied>1?'s':''} applied${result.skipped?' ('+result.skipped+' skipped)':''}`;
-    btn.style.color = 'var(--success)';
-    btn.style.borderColor = 'var(--success)';
-    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
+  try {
+    let fullText = '';
+    await callClaude(systemPrompt, userMsg, (text) => { fullText = text; });
+
+    const finalResume = normalizeResumeText(fullText);
+
+    // Validate output
+    const validation = validateResumeOutput(finalResume, baseResume);
+    if (!validation.valid) {
+      showError('gr-error', 'Generation failed: ' + validation.reason + ' Please try again.');
+      return;
+    }
+
+    // Store the base resume snapshot that edits were applied to
+    window._leBaseResumeText = baseResume;
+    // Store the generated resume
+    window._grResumeText = finalResume;
+    window._grResumeKey = selectedLeResume;
+    // Track chat note boundary \u2014 only notes after this point are new
+    window._leChatIndexAtLastResumeGenerate = leHistory.length;
+
+    // Populate page 07 textarea
+    const rcTa = document.getElementById('updated-resume-text');
+    if (rcTa) rcTa.value = finalResume;
+
+    // Render the full resume
+    document.getElementById('gr-output').innerHTML = renderResumePreview(finalResume);
+    document.getElementById('gr-result').style.display = 'block';
+    storeResumeVersion(finalResume, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
+
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = `\u2713 ${checkedEdits.length} edit${checkedEdits.length > 1 ? 's' : ''} applied`;
+      btn.style.color = 'var(--success)';
+      btn.style.borderColor = 'var(--success)';
+      setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
+    }
+  } catch (err) {
+    showError('gr-error', 'Something went wrong: ' + err.message);
+  } finally {
+    hideLoading('gr-loading');
   }
 }
 

@@ -1095,19 +1095,7 @@
     <span id="gh-sync-label">Synced</span>
   </div>
 
-  <!-- PIPELINE PROGRESS BAR -->
-  <div id="pipeline-bar" style="background:#0a0a0a;padding:10px 3rem 14px;display:none;">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;position:relative;margin-bottom:8px;" id="pipeline-steps"></div>
-    <div style="height:3px;background:#1e1e1e;border-radius:2px;position:relative;margin:0 10px;">
-      <div id="pipeline-fill" style="height:100%;border-radius:2px;background:#3fa040;transition:width 0.4s ease;width:0%;"></div>
-      <div id="pipeline-glow" style="position:absolute;top:-4px;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid #3fa040;transform:translateX(-50%);left:0%;transition:left 0.4s ease;"></div>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
-      <div id="pipeline-summary" style="font-size:11px;color:#666;font-family:'Raleway',sans-serif;letter-spacing:0.04em;"></div>
-      <button id="pipeline-cta" style="display:none;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;background:#fff;color:#000;border:none;border-radius:3px;cursor:pointer;font-family:'Raleway',sans-serif;"></button>
-    </div>
-  </div>
-  <!-- JD CONTEXT BAR -->
+  <!-- JD CONTEXT BAR -->  <!-- JD CONTEXT BAR -->
   <div id="jd-context-bar" style="background:#111;border-top:1px solid #1a1a1a;padding:7px 3rem;display:none;align-items:center;justify-content:space-between;gap:1rem;">
     <div style="display:flex;align-items:center;gap:10px;">
       <div style="width:22px;height:22px;border-radius:4px;background:#1a2744;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -3213,7 +3201,6 @@ document.getElementById('save-jd-btn').addEventListener('click', () => {
     if (roleEl && !roleEl.value && rolePart) roleEl.value = rolePart;
   }
   document.getElementById('jd-saved-msg').style.display = 'block';
-  updatePipeline();
   updateJdContextBar();
   if (savedRoleName || savedJDUrl) {
     const newJob = {
@@ -6763,6 +6750,7 @@ function markNavDone(panelId) {
   if (!done.includes(panelId)) { done.push(panelId); localStorage.setItem('cara_nav_done', JSON.stringify(done)); }
   const link = document.querySelector(`nav a[data-panel="${panelId}"]`);
   if (link) link.classList.add('nav-done');
+  setTimeout(() => updateJdContextBar(), 50);
 }
 
 function updateNavStates() {
@@ -8379,7 +8367,7 @@ function renderWsCards(data) {
   }
 }
 
-// ─── PIPELINE PROGRESS BAR ────────────────────────────────────────────────────
+// ─── PIPELINE STEPS (used by JD context bar) ────────────────────────────────
 
 const PIPELINE_STEPS = [
   { key: 'job-input',        label: 'Job Description', num: '04' },
@@ -8391,58 +8379,6 @@ const PIPELINE_STEPS = [
   { key: 'linkedin-outreach',label: 'Engagement',      num: '13' },
   { key: 'interview-prep',   label: 'Interview Prep',  num: '14' },
 ];
-
-function updatePipeline() {
-  const bar = document.getElementById('pipeline-bar');
-  const stepsEl = document.getElementById('pipeline-steps');
-  const fill = document.getElementById('pipeline-fill');
-  const glow = document.getElementById('pipeline-glow');
-  const summary = document.getElementById('pipeline-summary');
-  const cta = document.getElementById('pipeline-cta');
-  if (!bar || !stepsEl) return;
-
-  if (!savedJD) { bar.style.display = 'none'; return; }
-  bar.style.display = 'block';
-
-  const done = JSON.parse(localStorage.getItem('cara_nav_done') || '[]');
-  const activePanel = document.querySelector('nav a.active')?.dataset?.panel || '';
-  const activeIdx = PIPELINE_STEPS.findIndex(s => s.key === activePanel);
-
-  let doneCount = 0;
-  let firstIncomplete = null;
-
-  stepsEl.innerHTML = PIPELINE_STEPS.map((step, i) => {
-    const isDone = done.includes(step.key);
-    const isActive = step.key === activePanel;
-    if (isDone) doneCount++;
-    else if (!firstIncomplete) firstIncomplete = step;
-    const col = isDone ? '#3fa040' : isActive ? '#ffffff' : '#333';
-    const bg = isDone ? '#3fa040' : isActive ? '#ffffff' : '#1a1a1a';
-    const textCol = isDone ? '#4caf80' : isActive ? '#ffffff' : '#444';
-    const icon = isDone ? '✓' : isActive ? '→' : step.num;
-    const score = isDone && step.key === 'ats-check' && atsHighestResume ? '' : '';
-    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;position:relative;">
-      ${i < PIPELINE_STEPS.length - 1 ? `<div style="position:absolute;top:10px;left:calc(50% + 12px);right:calc(-50% + 12px);height:1.5px;background:${isDone?'#3fa040':'#1e1e1e'};z-index:0;"></div>` : ''}
-      <div style="width:22px;height:22px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${isDone?'#fff':isActive?'#000':'#555'};position:relative;z-index:1;margin-bottom:5px;">${icon}</div>
-      <div style="font-size:9px;font-weight:500;color:${textCol};text-align:center;line-height:1.3;white-space:nowrap;">${step.label}</div>
-    </div>`;
-  }).join('');
-
-  const pct = Math.round((doneCount / PIPELINE_STEPS.length) * 100);
-  fill.style.width = pct + '%';
-  glow.style.left = pct + '%';
-
-  const role = savedRoleName || savedRoleTitle || 'current application';
-  summary.innerHTML = `<strong style="color:#4caf80;">${doneCount} of ${PIPELINE_STEPS.length} steps done</strong> &nbsp;·&nbsp; ${escHtml(role)}`;
-
-  if (firstIncomplete && firstIncomplete.key !== activePanel) {
-    cta.style.display = 'block';
-    cta.textContent = 'Next: ' + firstIncomplete.label + ' →';
-    cta.onclick = () => document.querySelector(`nav a[data-panel="${firstIncomplete.key}"]`)?.click();
-  } else {
-    cta.style.display = 'none';
-  }
-}
 
 function updateJdContextBar() {
   const bar = document.getElementById('jd-context-bar');
@@ -8483,23 +8419,15 @@ if (_origFitEl) {
   _fitObs.observe(_origFitEl, { childList: true, characterData: true, subtree: true });
 }
 
-// Hook pipeline + context bar into nav clicks
+// Hook context bar into nav clicks
 (function() {
   const origNav = document.querySelector('nav');
   if (origNav) {
     origNav.addEventListener('click', function() {
-      setTimeout(() => { updatePipeline(); updateJdContextBar(); }, 50);
+      setTimeout(() => { updateJdContextBar(); }, 50);
     });
   }
 })();
-
-// Hook into markNavDone to update pipeline
-const _origMarkNavDone = markNavDone;
-const markNavDoneWithPipeline = function(panelId) {
-  _origMarkNavDone(panelId);
-  setTimeout(() => { updatePipeline(); updateJdContextBar(); }, 100);
-};
-window.markNavDone = markNavDoneWithPipeline;
 
 // ─── SMART NEXT-STEP NUDGE ────────────────────────────────────────────────────
 
@@ -8726,7 +8654,6 @@ renderAllOptimizers();
   }
   renderDashboard();
   updateNavStates();
-  updatePipeline();
   updateJdContextBar();
   addDeadlineToManualForm();
   setTimeout(maybeAutoFocus, 800);

@@ -3268,10 +3268,12 @@ document.getElementById('save-jd-btn').addEventListener('click', () => {
 });
 
 // ─── API CALL HELPER ─────────────────────────────────────────────────────────
-async function callClaude(systemPrompt, userMessage, onChunk) {
+async function callClaude(systemPrompt, userMessage, onChunk, skipLensContext) {
+  if (!skipLensContext) {
   const hiringManagerLens = `PERSPECTIVE: You are advising from the point of view of a hiring manager, not a resume coach. For every response, ask yourself: What problems does this role solve at a company like this? How do I advise and empower Cara to position herself as that solution? Frame all edits, scores, cover letters, answers, and advice through that lens — what a hiring manager needs to see, not just what looks good on paper.\n\n`;
   const atsContext = (savedAtsKeywords || savedAtsFlags || savedAtsPath) ? `ATS INSIGHTS FROM PRIOR ANALYSIS (use these to strengthen your response):\n${savedAtsKeywords ? 'MISSING KEYWORDS:\n' + savedAtsKeywords + '\n\n' : ''}${savedAtsFlags ? 'RED FLAGS & WINS:\n' + savedAtsFlags + '\n\n' : ''}${savedAtsPath ? 'FASTEST PATH TO 95%+:\n' + savedAtsPath + '\n\n' : ''}` : '';
   systemPrompt = hiringManagerLens + atsContext + systemPrompt;
+  }
   const apiKey = localStorage.getItem('cara_api_key') || '';
   if (!apiKey) {
     throw new Error('No API key saved. Click ⚙ API Key in the header to add your key.');
@@ -7257,6 +7259,15 @@ function validateResumeOutput(text, baseResume) {
   const anchors = ['@', /linkedin/i, /experience/i, /education/i];
   const matched = anchors.filter(a => new RegExp(a).test(text)).length;
   if (matched < 2) return { valid: false, reason: 'Output is missing key resume sections (contact, experience, education).' };
+  // Reject placeholder/templated brackets (e.g. "[Last Name]", "[City, State]", "[Phone]") — means the model
+  // fabricated a generic template instead of using the real contact info already present in the base resume.
+  if (/\[(last name|city,?\s*state|phone|email|linkedin)\]/i.test(text)) {
+    return { valid: false, reason: 'Output contains placeholder text (e.g. "[Last Name]" or "[Phone]") instead of your real contact info from the base resume.' };
+  }
+  // Reject inline commentary/notes left instead of directly applying an edit — those belong in chat, never in the resume.
+  if (/\[\s*note (for cara|to self)/i.test(text) || /\bupdate (this|these) (bullet|line|section)s? directly\b/i.test(text) || /\bconfirm the exact text\b/i.test(text)) {
+    return { valid: false, reason: 'Output contains a note-to-self instead of directly applying an edit — one of the selected edits could not be matched to exact resume text.' };
+  }
   return { valid: true };
 }
 
@@ -7283,27 +7294,52 @@ async function generateResumeFromEdits(btn) {
 
   if (checkedEdits.length === 0) { alert('Check at least one edit to apply, then click Generate.'); return; }
 
+  // Only pass edits whose BEFORE text is an actual verbatim quote from the base resume through to
+  // Claude. Edits generated as vague/general recommendations (e.g. "apply keyword X to any RealReal
+  // bullet about Y") rather than an exact line quote cannot be mechanically located and applied —
+  // sending them anyway is what previously caused fabricated notes and hallucinated content in the
+  // output. Filter those out here (whitespace-normalized match) and tell the user how many were skipped.
+  const normForMatch = s => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const normBase = normForMatch(baseResume);
+  const applicableEdits = [];
+  let skippedCount = 0;
+  checkedEdits.forEach(e => {
+    if (e.isInsert) { applicableEdits.push(e); return; }
+    if (e.before && normBase.includes(normForMatch(e.before))) {
+      applicableEdits.push(e);
+    } else {
+      skippedCount++;
+    }
+  });
+
+  if (applicableEdits.length === 0) {
+    showError('gr-error', 'None of the selected edits could be matched to exact text in your base resume, so nothing was generated. Please re-check the Line-by-Line Edits against the resume you selected.');
+    return;
+  }
+
   // Record acceptance rate
   recordEditDecision(checkedEdits.length, blocks.length);
 
-  const editsList = checkedEdits.map((e, i) => {
+  const editsList = applicableEdits.map((e, i) => {
     const label = e.section ? ` [${e.section}]` : '';
     return e.isInsert
       ? `EDIT ${i + 1}${label} \u2014 INSERT NEW LINE:\n"${e.after}"`
       : `EDIT ${i + 1}${label} \u2014 REPLACE:\n"${e.before}"\nWITH:\n"${e.after}"`;
   }).join('\n\n');
 
-  const systemPrompt = `You are assembling a final, complete resume from a base resume and a list of pre-approved edits. Every edit listed has already been reviewed and approved by the candidate \u2014 your only job is to apply them and output the full resulting resume, start to finish.
+  const systemPrompt = `You are a mechanical text-editing tool assembling a final, complete resume from a base resume and a list of pre-approved edits. Every edit listed has already been reviewed and approved by the candidate \u2014 your only job is to apply them and output the full resulting resume, start to finish. You are NOT a career coach or advisor here; do not add commentary, suggestions, or notes of any kind.
 
 CRITICAL RULES (non-negotiable):
 - Apply ONLY the listed edits. Do not make any other wording, structural, or content change.
 - Never invent, add, or remove any employer, title, credential, metric, tool, or skill beyond what the listed edits specify.
 - Preserve every section, job entry, and bullet from the base resume that is not targeted by an edit \u2014 copy it through verbatim, including exact wording and line breaks.
 - Never omit, condense, cut, or summarize any part of the resume to save space. Output the ENTIRE resume from the header through the last line.
-- If an edit's BEFORE text cannot be found verbatim in the base resume, use your best judgment to locate the closest matching line by meaning and apply the AFTER text there \u2014 do not skip it and do not fabricate a new line for it.
-- Output plain text only: one line per resume line, section headers in ALL CAPS on their own line, a blank line between sections, bullets on their own lines starting with an em dash (\u2014). No markdown formatting, no commentary, no preamble, no explanations \u2014 output only the final resume text.`;
+- The contact header (name, phone, email, LinkedIn, website) is provided verbatim in the base resume below \u2014 copy it through EXACTLY as written. Never replace any part of it with a bracketed placeholder like "[Last Name]", "[City, State]", "[Phone]", or "[Email]" under any circumstance.
+- Every EDIT's BEFORE text below is guaranteed to already exist verbatim (or with only minor whitespace differences) in the base resume \u2014 find it and replace it with the AFTER text. Do not skip it and do not fabricate a new line for it.
+- Absolutely never write a note, comment, suggestion, question, or bracketed aside addressed to the candidate anywhere in the output (e.g. anything starting with "[NOTE", "[TODO", or containing phrases like "update this directly" or "confirm the exact text"). If you are ever unsure how to apply something, apply your best literal interpretation silently \u2014 never surface uncertainty in the output text itself.
+- Output plain text only: one line per resume line, section headers in ALL CAPS on their own line, a blank line between sections, bullets on their own lines starting with an em dash (\u2014). No markdown formatting, no commentary, no preamble, no explanations \u2014 output ONLY the final resume text, nothing before or after it.`;
 
-  const userMsg = `BASE RESUME (apply the approved edits to this text; keep everything else exactly as-is):\n${baseResume}\n\nAPPROVED EDITS TO APPLY (${checkedEdits.length} total):\n${editsList}\n\nOutput the complete, final resume text with the above edits applied and everything else preserved exactly.`;
+  const userMsg = `BASE RESUME (apply the approved edits to this text; keep everything else — including the exact contact header — exactly as-is):\n${baseResume}\n\nAPPROVED EDITS TO APPLY (${applicableEdits.length} total):\n${editsList}\n\nOutput the complete, final resume text with the above edits applied and everything else preserved exactly. Output only the resume text — no notes, no commentary.`;
 
   showLoading('gr-loading');
   hideError('gr-error');
@@ -7311,7 +7347,7 @@ CRITICAL RULES (non-negotiable):
 
   try {
     let fullText = '';
-    await callClaude(systemPrompt, userMsg, (text) => { fullText = text; });
+    await callClaude(systemPrompt, userMsg, (text) => { fullText = text; }, true);
 
     const finalResume = normalizeResumeText(fullText);
 
@@ -7339,9 +7375,13 @@ CRITICAL RULES (non-negotiable):
     document.getElementById('gr-result').style.display = 'block';
     storeResumeVersion(finalResume, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
 
+    if (skippedCount > 0) {
+      showError('gr-error', `Note: ${skippedCount} selected edit${skippedCount > 1 ? 's' : ''} could not be matched to exact text in your resume and ${skippedCount > 1 ? 'were' : 'was'} skipped (the rest were applied successfully below). Re-check those edits on the Line-by-Line Edits page against your actual resume text.`);
+    }
+
     if (btn) {
       const orig = btn.textContent;
-      btn.textContent = `\u2713 ${checkedEdits.length} edit${checkedEdits.length > 1 ? 's' : ''} applied`;
+      btn.textContent = `\u2713 ${applicableEdits.length} edit${applicableEdits.length > 1 ? 's' : ''} applied`;
       btn.style.color = 'var(--success)';
       btn.style.borderColor = 'var(--success)';
       setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);

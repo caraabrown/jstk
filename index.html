@@ -7271,6 +7271,23 @@ function validateResumeOutput(text, baseResume) {
   return { valid: true };
 }
 
+function applyReplaceEdit(resumeText, before, after) {
+  // Exact verbatim match first — the expected case, since BEFORE was already verified against the base resume.
+  let idx = resumeText.indexOf(before);
+  if (idx !== -1) {
+    const occurrences = resumeText.split(before).length - 1;
+    return { text: resumeText.slice(0, idx) + after + resumeText.slice(idx + before.length), matched: true, ambiguous: occurrences > 1 };
+  }
+  // Fallback: whitespace-flexible match, for BEFORE text with minor spacing differences from the live resume.
+  const escaped = before.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  let re;
+  try { re = new RegExp(escaped); } catch (err) { return { text: resumeText, matched: false, ambiguous: false }; }
+  const m = resumeText.match(re);
+  if (!m) return { text: resumeText, matched: false, ambiguous: false };
+  const occurrences = (resumeText.match(new RegExp(escaped, 'g')) || []).length;
+  return { text: resumeText.slice(0, m.index) + after + resumeText.slice(m.index + m[0].length), matched: true, ambiguous: occurrences > 1 };
+}
+
 async function generateResumeFromEdits(btn) {
   // Use the latest revised resume as base in round 2+, fall back to original
   // Normalize to clean PDF extraction artifacts (footer lines, split ligatures)
@@ -7320,41 +7337,67 @@ async function generateResumeFromEdits(btn) {
   // Record acceptance rate
   recordEditDecision(checkedEdits.length, blocks.length);
 
-  const editsList = applicableEdits.map((e, i) => {
-    const label = e.section ? ` [${e.section}]` : '';
-    return e.isInsert
-      ? `EDIT ${i + 1}${label} \u2014 INSERT NEW LINE:\n"${e.after}"`
-      : `EDIT ${i + 1}${label} \u2014 REPLACE:\n"${e.before}"\nWITH:\n"${e.after}"`;
-  }).join('\n\n');
-
-  const systemPrompt = `You are a mechanical text-editing tool assembling a final, complete resume from a base resume and a list of pre-approved edits. Every edit listed has already been reviewed and approved by the candidate \u2014 your only job is to apply them and output the full resulting resume, start to finish. You are NOT a career coach or advisor here; do not add commentary, suggestions, or notes of any kind.
-
-CRITICAL RULES (non-negotiable):
-- Apply ONLY the listed edits. Do not make any other wording, structural, or content change.
-- Never invent, add, or remove any employer, title, credential, metric, tool, or skill beyond what the listed edits specify.
-- Preserve every section, job entry, and bullet from the base resume that is not targeted by an edit \u2014 copy it through verbatim, including exact wording and line breaks.
-- Never omit, condense, cut, or summarize any part of the resume to save space. Output the ENTIRE resume from the header through the last line.
-- The contact header (name, phone, email, LinkedIn, website) is provided verbatim in the base resume below \u2014 copy it through EXACTLY as written. Never replace any part of it with a bracketed placeholder like "[Last Name]", "[City, State]", "[Phone]", or "[Email]" under any circumstance.
-- Every EDIT's BEFORE text below is guaranteed to already exist verbatim (or with only minor whitespace differences) in the base resume \u2014 find it and replace it with the AFTER text. Do not skip it and do not fabricate a new line for it.
-- Absolutely never write a note, comment, suggestion, question, or bracketed aside addressed to the candidate anywhere in the output (e.g. anything starting with "[NOTE", "[TODO", or containing phrases like "update this directly" or "confirm the exact text"). If you are ever unsure how to apply something, apply your best literal interpretation silently \u2014 never surface uncertainty in the output text itself.
-- Output plain text only: one line per resume line, section headers in ALL CAPS on their own line, a blank line between sections, bullets on their own lines starting with an em dash (\u2014). No markdown formatting, no commentary, no preamble, no explanations \u2014 output ONLY the final resume text, nothing before or after it.`;
-
-  const userMsg = `BASE RESUME (apply the approved edits to this text; keep everything else — including the exact contact header — exactly as-is):\n${baseResume}\n\nAPPROVED EDITS TO APPLY (${applicableEdits.length} total):\n${editsList}\n\nOutput the complete, final resume text with the above edits applied and everything else preserved exactly. Output only the resume text — no notes, no commentary.`;
-
   showLoading('gr-loading');
   hideError('gr-error');
   document.getElementById('gr-result').style.display = 'none';
 
   try {
-    let fullText = '';
-    await callClaude(systemPrompt, userMsg, (text) => { fullText = text; }, true);
+    // ── Deterministic assembly ────────────────────────────────────────────
+    // The base resume is reproduced by direct string substitution, never by asking the model to
+    // retype the whole document. A model asked to "copy this multi-page resume verbatim except for
+    // N lines" is unreliable over long output — it can drift into summarizing unchanged sections,
+    // truncate against the output token cap, or leave a note about what it skipped, which is exactly
+    // what was landing in the resume. Since every REPLACE edit's BEFORE text is already verified above
+    // to exist verbatim in the base resume, the substitution needs no AI involvement and cannot
+    // fabricate, omit, truncate, or annotate.
+    const replaceEdits = applicableEdits.filter(e => !e.isInsert);
+    const insertEdits = applicableEdits.filter(e => e.isInsert);
+    const ambiguousEdits = [];
+    const unmatchedReplaceEdits = [];
 
-    const finalResume = normalizeResumeText(fullText);
+    let assembled = baseResume;
+    replaceEdits.forEach(e => {
+      const result = applyReplaceEdit(assembled, e.before, e.after);
+      if (!result.matched) { unmatchedReplaceEdits.push(e); return; }
+      assembled = result.text;
+      if (result.ambiguous) ambiguousEdits.push(e);
+    });
 
-    // Validate output
+    // ── Insert edits ─────────────────────────────────────────────────────
+    // New lines have no positional anchor captured from the Line-by-Line Edits step, so the model is
+    // asked ONLY to name the exact existing line each new line follows — never to retype the resume.
+    // Each returned anchor is verified verbatim against the resume before use; an anchor that doesn't
+    // check out is skipped and surfaced in the UI, never guessed into the resume text.
+    const unplacedInserts = [];
+    if (insertEdits.length > 0) {
+      const anchorList = insertEdits.map((e, i) => `INSERT ${i + 1}${e.section ? ` [${e.section}]` : ''}: "${e.after}"`).join('\n');
+      const anchorSystemPrompt = `You locate insertion points in a resume. You are NOT rewriting or reproducing the resume — only identifying where each new line belongs.\n\nFor each numbered insert below, find the single best existing line in the resume for it to follow, and output that line copied EXACTLY — character for character, including punctuation — from the resume text given. Never paraphrase or reconstruct the anchor line from memory.\n\nOutput ONLY this format, one line per insert, nothing else before or after:\nANCHOR 1: [exact resume line]\nANCHOR 2: [exact resume line]\n\nDo not include any commentary, notes, or explanation.`;
+      const anchorUserMsg = `RESUME:\n${assembled}\n\nNEW LINES TO PLACE:\n${anchorList}\n\nFor each, output the exact existing resume line it should follow.`;
+      let anchorText = '';
+      await callClaude(anchorSystemPrompt, anchorUserMsg, (text) => { anchorText = text; }, true);
+      insertEdits.forEach((e, i) => {
+        const m = anchorText.match(new RegExp(`ANCHOR ${i + 1}:\\s*(.+)`));
+        const anchor = m ? m[1].trim() : '';
+        const idx = anchor ? assembled.indexOf(anchor) : -1;
+        if (idx === -1) { unplacedInserts.push(e); return; }
+        const lineEnd = assembled.indexOf('\n', idx);
+        const insertAt = lineEnd === -1 ? assembled.length : lineEnd;
+        assembled = assembled.slice(0, insertAt) + '\n' + e.after + assembled.slice(insertAt);
+      });
+    }
+
+    const finalResume = normalizeResumeText(assembled);
+
+    // Structural check only — the model never touched the assembled text, so there is nothing to
+    // scan for fabricated notes. This just guards against an unexpectedly short result.
+    if (!finalResume || finalResume.length < baseResume.length * 0.9) {
+      showError('gr-error', 'Assembly produced a shorter result than expected. Please try again or check the edits.');
+      return;
+    }
+    // Kept as a defense-in-depth check on the assembled text (placeholders, stray note phrasing).
     const validation = validateResumeOutput(finalResume, baseResume);
     if (!validation.valid) {
-      showError('gr-error', 'Generation failed: ' + validation.reason + ' Please try again.');
+      showError('gr-error', 'Assembly check failed: ' + validation.reason + ' Please try again.');
       return;
     }
 
@@ -7363,7 +7406,7 @@ CRITICAL RULES (non-negotiable):
     // Store the generated resume
     window._grResumeText = finalResume;
     window._grResumeKey = selectedLeResume;
-    // Track chat note boundary \u2014 only notes after this point are new
+    // Track chat note boundary — only notes after this point are new
     window._leChatIndexAtLastResumeGenerate = leHistory.length;
 
     // Populate page 07 textarea
@@ -7375,13 +7418,19 @@ CRITICAL RULES (non-negotiable):
     document.getElementById('gr-result').style.display = 'block';
     storeResumeVersion(finalResume, selectedLeResume, (window._sessionCtx?.currentRound || 1), '');
 
-    if (skippedCount > 0) {
-      showError('gr-error', `Note: ${skippedCount} selected edit${skippedCount > 1 ? 's' : ''} could not be matched to exact text in your resume and ${skippedCount > 1 ? 'were' : 'was'} skipped (the rest were applied successfully below). Re-check those edits on the Line-by-Line Edits page against your actual resume text.`);
+    const appliedCount = applicableEdits.length - unmatchedReplaceEdits.length - unplacedInserts.length;
+    const notes = [];
+    if (skippedCount > 0) notes.push(`${skippedCount} selected edit${skippedCount > 1 ? 's' : ''} could not be matched to exact text in your resume and ${skippedCount > 1 ? 'were' : 'was'} skipped`);
+    if (unmatchedReplaceEdits.length > 0) notes.push(`${unmatchedReplaceEdits.length} replace edit${unmatchedReplaceEdits.length > 1 ? 's' : ''} no longer matched the resume text at assembly time and ${unmatchedReplaceEdits.length > 1 ? 'were' : 'was'} skipped`);
+    if (unplacedInserts.length > 0) notes.push(`${unplacedInserts.length} inserted line${unplacedInserts.length > 1 ? 's' : ''} could not be placed and ${unplacedInserts.length > 1 ? 'were' : 'was'} skipped`);
+    if (ambiguousEdits.length > 0) notes.push(`${ambiguousEdits.length} edit${ambiguousEdits.length > 1 ? 's' : ''} matched more than one spot in the resume — the first occurrence was used`);
+    if (notes.length > 0) {
+      showError('gr-error', `Note: ${notes.join('; ')}. ${appliedCount} edit${appliedCount === 1 ? '' : 's'} applied successfully below. Re-check the skipped edits on the Line-by-Line Edits page.`);
     }
 
     if (btn) {
       const orig = btn.textContent;
-      btn.textContent = `\u2713 ${applicableEdits.length} edit${applicableEdits.length > 1 ? 's' : ''} applied`;
+      btn.textContent = `✓ ${appliedCount} edit${appliedCount === 1 ? '' : 's'} applied`;
       btn.style.color = 'var(--success)';
       btn.style.borderColor = 'var(--success)';
       setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
